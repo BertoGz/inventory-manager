@@ -135,6 +135,9 @@
         const ChevronDown = (props) => (
             <IconBase {...props}><path d="m6 9 6 6 6-6" /></IconBase>
         );
+        const FileText = (props) => (
+            <IconBase {...props}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><line x1="16" x2="8" y1="13" y2="13" /><line x1="16" x2="8" y1="17" y2="17" /><polyline points="10 9 9 9 8 9" /></IconBase>
+        );
 
         // --- Constants & Helpers ---
 
@@ -608,12 +611,13 @@
         const FileUploader = ({ onDataLoaded, hasExistingData }) => {
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState(null);
-            const inputRef = useRef(null);
+            const folderInputRef = useRef(null);
+            const fileInputRef = useRef(null);
 
             useEffect(() => {
-                if (inputRef.current) {
-                    inputRef.current.setAttribute("webkitdirectory", "");
-                    inputRef.current.setAttribute("directory", "");
+                if (folderInputRef.current) {
+                    folderInputRef.current.setAttribute("webkitdirectory", "");
+                    folderInputRef.current.setAttribute("directory", "");
                 }
             }, []);
 
@@ -741,38 +745,223 @@
                 return { data: enrichedData, metadata };
             };
 
+            const handleFileSelect = async (e) => {
+                const file = e.target.files[0];
+                if (!file) {
+                    e.target.value = '';
+                    return;
+                }
+
+                if (hasExistingData) {
+                    const confirmed = confirm(
+                        "⚠️ Warning: Importing a new file will replace all existing data.\n\n" +
+                        "Do you want to continue?"
+                    );
+                    if (!confirmed) {
+                        e.target.value = '';
+                        return;
+                    }
+                }
+
+                setLoading(true);
+                setError(null);
+
+                try {
+                    if (file.name.toLowerCase().endsWith('.db')) {
+                        // Import from SQLite database
+                        await importFromDatabase(file);
+                    } else {
+                        throw new Error("Please select a .db file.");
+                    }
+                } catch (err) {
+                    console.error(err);
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                    e.target.value = '';
+                }
+            };
+
+            const importFromDatabase = async (dbFile) => {
+                // Wait for sql.js to be available
+                let initSqlJs = window.initSqlJs;
+                if (!initSqlJs) {
+                    await new Promise((resolve) => {
+                        let attempts = 0;
+                        const checkInterval = setInterval(() => {
+                            attempts++;
+                            if (window.initSqlJs) {
+                                initSqlJs = window.initSqlJs;
+                                clearInterval(checkInterval);
+                                resolve();
+                            } else if (attempts > 50) {
+                                clearInterval(checkInterval);
+                                resolve();
+                            }
+                        }, 100);
+                    });
+                }
+
+                if (!initSqlJs) {
+                    throw new Error('SQL.js library not loaded. Please refresh the page and try again.');
+                }
+
+                // Read database file
+                const arrayBuffer = await dbFile.arrayBuffer();
+                const SQL = await initSqlJs({
+                    locateFile: file => `https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/${file}`
+                });
+                const db = new SQL.Database(new Uint8Array(arrayBuffer));
+
+                // Load items
+                const itemsResult = db.exec("SELECT type, id, name, quantity, price, rarity, image, data FROM items");
+                if (!itemsResult || itemsResult.length === 0) {
+                    throw new Error("No items found in database.");
+                }
+
+                const items = [];
+                const rows = itemsResult[0].values;
+                const columns = itemsResult[0].columns;
+                
+                for (const row of rows) {
+                    const item = {};
+                    columns.forEach((col, idx) => {
+                        if (col === 'data' && row[idx]) {
+                            // Parse JSON data if present
+                            try {
+                                const parsed = JSON.parse(row[idx]);
+                                Object.assign(item, parsed);
+                            } catch (e) {
+                                // If parsing fails, just use the raw value
+                                item[col] = row[idx];
+                            }
+                        } else {
+                            item[col] = row[idx];
+                        }
+                    });
+                    items.push(item);
+                }
+
+                // Load images
+                const imagesResult = db.exec("SELECT filename, data FROM images");
+                const urlMap = new Map();
+                const fileMap = new Map();
+
+                if (imagesResult && imagesResult.length > 0) {
+                    const imageRows = imagesResult[0].values;
+                    const imageColumns = imagesResult[0].columns;
+                    const filenameIdx = imageColumns.indexOf('filename');
+                    const dataIdx = imageColumns.indexOf('data');
+
+                    for (const row of imageRows) {
+                        const filename = row[filenameIdx];
+                        const blobData = row[dataIdx];
+                        
+                        if (blobData) {
+                            try {
+                                // SQL.js returns BLOB as Uint8Array
+                                // Handle both Uint8Array and Array formats
+                                let dataArray;
+                                if (blobData instanceof Uint8Array) {
+                                    dataArray = blobData;
+                                } else if (Array.isArray(blobData)) {
+                                    dataArray = new Uint8Array(blobData);
+                                } else {
+                                    // Try to convert if it's some other format
+                                    dataArray = new Uint8Array(blobData);
+                                }
+                                
+                                const blob = new Blob([dataArray], { type: 'image/jpeg' });
+                                urlMap.set(filename, URL.createObjectURL(blob));
+                                fileMap.set(filename, blob);
+                            } catch (err) {
+                                console.warn(`Failed to load image ${filename}:`, err);
+                            }
+                        }
+                    }
+                }
+
+                // Load metadata
+                const metadataResult = db.exec("SELECT value FROM metadata WHERE key = 'date'");
+                let metadata = null;
+                if (metadataResult && metadataResult.length > 0 && metadataResult[0].values.length > 0) {
+                    const dateValue = metadataResult[0].values[0][0];
+                    metadata = { Date: dateValue };
+                }
+
+                db.close();
+
+                // Enrich data
+                const enrichedData = items.map((item, idx) => ({
+                    type: item.type || item.id || `temp-${idx}`,
+                    id: item.id || `temp-${idx}`,
+                    ...item,
+                    name: item.name || "Unknown Item",
+                    image: item.image || "",
+                    quantity: item.quantity || 0,
+                    price: item.price || 0,
+                    rarity: item.rarity !== undefined ? item.rarity : 0
+                }));
+
+                onDataLoaded(enrichedData, urlMap, metadata, fileMap);
+            };
+
             return (
                 <div className="flex flex-col items-center justify-center h-full space-y-6 p-8 text-center bg-slate-950 text-slate-100 animate-in fade-in duration-700">
-                    <div className="bg-slate-900/50 p-10 rounded-2xl border border-slate-800 shadow-2xl max-w-lg w-full backdrop-blur-sm">
-                        <div className="bg-blue-500/10 p-4 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center">
-                            <FolderOpen className="w-12 h-12 text-blue-500" />
-                        </div>
-                        
+                    <div className="bg-slate-900/50 p-10 rounded-2xl border border-slate-800 shadow-2xl max-w-4xl w-full backdrop-blur-sm">
                         <h1 className="text-3xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
                             Import Inventory
                         </h1>
                         
                         <p className="text-slate-400 mb-8 leading-relaxed">
-                            Select the folder containing your data file and images.
+                            Choose how you want to import your inventory data.
                         </p>
 
-                        <label className="relative group flex items-center justify-center px-6 py-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] w-full shadow-lg hover:shadow-blue-500/25">
                             {loading ? (
-                                <div className="flex items-center gap-2">
-                                    <RefreshCw className="w-5 h-5 animate-spin" />
-                                    <span>Processing Data...</span>
+                            <div className="flex flex-col items-center justify-center py-12">
+                                <RefreshCw className="w-12 h-12 text-blue-500 animate-spin mb-4" />
+                                <span className="text-slate-300">Processing Data...</span>
                                 </div>
                             ) : (
-                                <span>Select Folder</span>
-                            )}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Option 1: Upload New Folder */}
+                                <label className="relative group flex flex-col items-center justify-center px-6 py-8 bg-slate-800 hover:bg-slate-700/80 border border-slate-700 hover:border-blue-500/50 rounded-xl cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg">
+                                    <div className="bg-blue-500/10 p-4 rounded-full mb-4 group-hover:bg-blue-500/20 transition-colors">
+                                        <FolderOpen className="w-8 h-8 text-blue-400" />
+                                    </div>
+                                    <h3 className="text-lg font-semibold text-white mb-2">Upload New Inventory</h3>
+                                    <p className="text-sm text-slate-400 text-center leading-snug">
+                                        Select a folder containing extracted <br/> <code className="text-blue-300">furniture_data.txt</code> and images.
+                                    </p>
                             <input 
-                                ref={inputRef}
+                                        ref={folderInputRef}
                                 type="file" 
                                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                 onChange={handleFolderSelect}
                                 disabled={loading}
                             />
                         </label>
+
+                                {/* Option 2: Import Existing File */}
+                                <label className="relative group flex flex-col items-center justify-center px-6 py-8 bg-slate-800 hover:bg-slate-700/80 border border-slate-700 hover:border-emerald-500/50 rounded-xl cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg">
+                                    <div className="bg-emerald-500/10 p-4 rounded-full mb-4 group-hover:bg-emerald-500/20 transition-colors">
+                                        <FileText className="w-8 h-8 text-emerald-400" />
+                                    </div>
+                                    <h3 className="text-lg font-semibold text-white mb-2">Import Existing File</h3>
+                                    <p className="text-sm text-slate-400 text-center leading-snug">
+                                        Import a standalone existing <br/> <code className="text-emerald-300">.db</code> file.
+                                    </p>
+                                    <input 
+                                        ref={fileInputRef}
+                                        type="file" 
+                                        accept=".db"
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                        onChange={handleFileSelect}
+                                        disabled={loading}
+                                    />
+                                </label>
+                            </div>
+                        )}
 
                         {error && (
                             <div className="mt-6 p-4 bg-red-950/30 border border-red-900/50 text-red-200 rounded-lg text-sm flex items-start gap-3 text-left animate-in slide-in-from-top-2">
