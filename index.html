@@ -37,9 +37,7 @@
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         
         /* Optimization for large lists */
-        .virtual-scroller {
-            /* content-visibility: auto; removed to prevent empty view issues */
-        }
+        /* .virtual-scroller - content-visibility: auto; removed to prevent empty view issues */
 
         /* Animations */
         @keyframes pulse-subtle {
@@ -118,10 +116,11 @@
 
         // --- IndexedDB Helpers (FIXED & VERSION BUMPED) ---
         const DB_NAME = 'vmkInventoryDB';
-        const DB_VERSION = 2; // Bumped version to ensure schema updates
+        const DB_VERSION = 3; // Bumped version to add embeddings store
         const STORE_ITEMS = 'items';
         const STORE_IMAGES = 'images';
         const STORE_METADATA = 'metadata';
+        const STORE_EMBEDDINGS = 'embeddings';
 
         function openDB() {
             return new Promise((resolve, reject) => {
@@ -139,37 +138,47 @@
                     if (!db.objectStoreNames.contains(STORE_METADATA)) {
                         db.createObjectStore(STORE_METADATA, { keyPath: 'key' });
                     }
+                    if (!db.objectStoreNames.contains(STORE_EMBEDDINGS)) {
+                        db.createObjectStore(STORE_EMBEDDINGS, { keyPath: 'id' });
+                    }
                 };
             });
         }
 
-        // 1. Separate saving Images (Heavy)
-        async function saveImagesToIndexedDB(imageFileMap) {
+        // 1. Separate saving Images (Heavy) - Now merges instead of clearing
+        async function saveImagesToIndexedDB(imageFileMap, existingImageMap = null) {
             try {
                 const db = await openDB();
                 const tx = db.transaction([STORE_IMAGES], 'readwrite');
                 const imagesStore = tx.objectStore(STORE_IMAGES);
                 
-                // Clear old images first
-                imagesStore.clear();
-
+                // Only save new images (merge, don't clear)
+                let newCount = 0;
                 for (const [filename, fileObj] of imageFileMap.entries()) {
-                    imagesStore.put({ filename, blob: fileObj });
+                    // Check if image already exists (by filename)
+                    if (!existingImageMap || !existingImageMap.has(filename)) {
+                        imagesStore.put({ filename, blob: fileObj });
+                        newCount++;
+                    }
                 }
 
                 await new Promise((resolve, reject) => {
-                    tx.oncomplete = () => resolve();
+                    tx.oncomplete = () => {
+                        if (newCount > 0) {
+                            console.log(`Saved ${newCount} new images to IndexedDB.`);
+                        }
+                        resolve();
+                    };
                     tx.onerror = () => reject(tx.error);
                     tx.onabort = () => reject(new Error("Image transaction aborted"));
                 });
-                console.log("Images saved successfully.");
             } catch (e) {
                 console.error("Failed to save images:", e);
                 throw e;
             }
         }
 
-        // 2. Efficient Data Saver
+        // 2. Efficient Data Saver - Now merges instead of clearing
         async function saveDataToIndexedDB(items, metadata) {
             try {
                 if (!items || items.length === 0) {
@@ -180,9 +189,8 @@
                 const db = await openDB();
                 const tx = db.transaction([STORE_ITEMS, STORE_METADATA], 'readwrite');
                 
-                // Save items
+                // Save items (merge, don't clear)
                 const itemsStore = tx.objectStore(STORE_ITEMS);
-                itemsStore.clear(); // Clear old items
                 
                 let putCount = 0;
                 items.forEach(item => {
@@ -214,10 +222,71 @@
             }
         }
 
+        // 3. Save Embeddings to IndexedDB
+        async function saveEmbeddingsToIndexedDB(embeddingsMap) {
+            try {
+                if (!embeddingsMap || embeddingsMap.size === 0) return;
+
+                const db = await openDB();
+                const tx = db.transaction([STORE_EMBEDDINGS], 'readwrite');
+                const embeddingsStore = tx.objectStore(STORE_EMBEDDINGS);
+                
+                let savedCount = 0;
+                for (const [itemId, vector] of embeddingsMap.entries()) {
+                    try {
+                        embeddingsStore.put({ id: itemId, vector: Array.from(vector) });
+                        savedCount++;
+                    } catch (err) {
+                        console.error("Error saving embedding for item:", itemId, err);
+                    }
+                }
+
+                await new Promise((resolve, reject) => {
+                    tx.oncomplete = () => {
+                        if (savedCount > 0) {
+                            console.log(`Saved ${savedCount} embeddings to IndexedDB.`);
+                        }
+                        resolve();
+                    };
+                    tx.onerror = () => reject(tx.error);
+                    tx.onabort = () => reject(new Error("Embeddings transaction aborted"));
+                });
+            } catch (e) {
+                console.error("Failed to save embeddings:", e);
+                throw e;
+            }
+        }
+
+        // 4. Load Embeddings from IndexedDB
+        async function loadEmbeddingsFromIndexedDB() {
+            try {
+                const db = await openDB();
+                const tx = db.transaction([STORE_EMBEDDINGS], 'readonly');
+                const embeddingsStore = tx.objectStore(STORE_EMBEDDINGS);
+                
+                const embeddingsRecords = await new Promise((resolve, reject) => {
+                    const req = embeddingsStore.getAll();
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+
+                // Convert to Map: itemId -> vector array
+                const embeddingsMap = new Map();
+                for (const record of embeddingsRecords) {
+                    embeddingsMap.set(record.id, record.vector);
+                }
+
+                return embeddingsMap;
+            } catch (e) {
+                console.error('Error loading embeddings from IndexedDB:', e);
+                return new Map();
+            }
+        }
+
         async function loadFromIndexedDB() {
             try {
                 const db = await openDB();
-                const tx = db.transaction([STORE_ITEMS, STORE_IMAGES, STORE_METADATA], 'readonly');
+                const tx = db.transaction([STORE_ITEMS, STORE_IMAGES, STORE_METADATA, STORE_EMBEDDINGS], 'readonly');
                 
                 // Load items
                 const itemsStore = tx.objectStore(STORE_ITEMS);
@@ -254,20 +323,35 @@
                     Date: metadataRecord.Date 
                 } : null;
 
-                return { items, imageMap, metadata };
+                // Load embeddings
+                const embeddingsStore = tx.objectStore(STORE_EMBEDDINGS);
+                const embeddingsRecords = await new Promise((resolve, reject) => {
+                    const req = embeddingsStore.getAll();
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+
+                // Convert embeddings to Map: itemId -> vector array
+                const embeddingsMap = new Map();
+                for (const record of embeddingsRecords) {
+                    embeddingsMap.set(record.id, record.vector);
+                }
+
+                return { items, imageMap, metadata, embeddingsMap };
             } catch (e) {
                 console.error('Error loading from IndexedDB:', e);
-                return { items: [], imageMap: new Map(), metadata: null };
+                return { items: [], imageMap: new Map(), metadata: null, embeddingsMap: new Map() };
             }
         }
 
         async function clearIndexedDB() {
             try {
                 const db = await openDB();
-                const tx = db.transaction([STORE_ITEMS, STORE_IMAGES, STORE_METADATA], 'readwrite');
+                const tx = db.transaction([STORE_ITEMS, STORE_IMAGES, STORE_METADATA, STORE_EMBEDDINGS], 'readwrite');
                 await tx.objectStore(STORE_ITEMS).clear();
                 await tx.objectStore(STORE_IMAGES).clear();
                 await tx.objectStore(STORE_METADATA).clear();
+                await tx.objectStore(STORE_EMBEDDINGS).clear();
                 await new Promise((resolve, reject) => {
                     tx.oncomplete = () => resolve();
                     tx.onerror = () => reject(tx.error);
@@ -623,7 +707,7 @@
             useEffect(() => {
                 const loadData = async () => {
                     try {
-                        const { items, imageMap: loadedImageMap, metadata } = await loadFromIndexedDB();
+                        const { items, imageMap: loadedImageMap, metadata, embeddingsMap } = await loadFromIndexedDB();
                         if (items && items.length > 0) {
                             const indexedData = items.map((d, i) => ({...d, actualIndex: i}));
                             setData(indexedData);
@@ -631,6 +715,15 @@
                             setHasStoredData(true);
                             if (metadata) {
                                 setExtractionDate(metadata.Date);
+                            }
+                            
+                            // Convert embeddings Map to array format (matching item order)
+                            if (embeddingsMap && embeddingsMap.size > 0) {
+                                const embeddingsArray = indexedData.map(item => embeddingsMap.get(item.id) || null);
+                                // Only set if we have at least some embeddings
+                                if (embeddingsArray.some(e => e !== null)) {
+                                    setEmbeddings(embeddingsArray);
+                                }
                             }
                         } else {
                             setHasStoredData(false);
@@ -671,28 +764,108 @@
                 return () => clearInterval(checkInterval);
             }, []);
 
-            // 2. Index Data when Loaded
+            // 2. Index Data when Loaded - Only generate missing embeddings
             useEffect(() => {
-                if (!data || !pipeline || embeddings) return;
+                if (!data || !pipeline) return;
 
                 const generateEmbeddings = async () => {
+                    // Load existing embeddings from DB
+                    const existingEmbeddingsMap = await loadEmbeddingsFromIndexedDB();
+                    
+                    // Determine which items need embeddings
+                    const itemsNeedingEmbeddings = [];
+                    const itemsNeedingRegeneration = [];
                     const vectors = [];
+                    
+                    // Check each item
+                    for (let i = 0; i < data.length; i++) {
+                        const item = data[i];
+                        const existingEmbedding = existingEmbeddingsMap.get(item.id);
+                        
+                        if (!existingEmbedding) {
+                            // Missing embedding - need to generate
+                            itemsNeedingEmbeddings.push({ index: i, item });
+                            vectors.push(null); // placeholder
+                        } else {
+                            // Check if name changed (need to regenerate)
+                            const existingItem = data.find(d => d.id === item.id);
+                            // We'll check by comparing with stored item name if we have it
+                            // For now, assume if embedding exists and item exists, it's valid
+                            // But we need to track name changes
+                            // Simple approach: if embedding exists, use it (we'll handle name changes in handleUpdateItem)
+                            vectors.push(existingEmbedding);
+                        }
+                    }
+                    
+                    // Also check for name changes by loading existing items from DB
+                    // For items with embeddings, verify the name hasn't changed
+                    const db = await openDB();
+                    const tx = db.transaction([STORE_ITEMS], 'readonly');
+                    const itemsStore = tx.objectStore(STORE_ITEMS);
+                    const existingItems = await new Promise((resolve, reject) => {
+                        const req = itemsStore.getAll();
+                        req.onsuccess = () => resolve(req.result);
+                        req.onerror = () => reject(req.error);
+                    });
+                    
+                    const existingItemsMap = new Map(existingItems.map(item => [item.id, item]));
+                    
+                    // Re-check for name changes
+                    for (let i = 0; i < data.length; i++) {
+                        const item = data[i];
+                        const existingItem = existingItemsMap.get(item.id);
+                        const existingEmbedding = existingEmbeddingsMap.get(item.id);
+                        
+                        if (existingItem && existingEmbedding && existingItem.name !== item.name) {
+                            // Name changed - need to regenerate
+                            itemsNeedingRegeneration.push({ index: i, item });
+                            vectors[i] = null; // mark for regeneration
+                        }
+                    }
+                    
+                    const totalNeedingGeneration = itemsNeedingEmbeddings.length + itemsNeedingRegeneration.length;
+                    
+                    if (totalNeedingGeneration === 0) {
+                        // All embeddings exist and are up to date
+                        setEmbeddings(vectors);
+                        setIndexingProgress(100);
+                        return;
+                    }
+                    
                     setIndexingProgress(0);
                     
+                    // Generate embeddings for items that need them
+                    const itemsToProcess = [...itemsNeedingEmbeddings, ...itemsNeedingRegeneration];
+                    const embeddingsToSave = new Map();
+                    
                     const CHUNK_SIZE = 10;
-                    for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-                        const chunk = data.slice(i, i + CHUNK_SIZE);
-                        const promises = chunk.map(async (item) => {
+                    for (let i = 0; i < itemsToProcess.length; i += CHUNK_SIZE) {
+                        const chunk = itemsToProcess.slice(i, i + CHUNK_SIZE);
+                        const promises = chunk.map(async ({ index, item }) => {
                             const output = await pipeline(`Furniture item: ${item.name}`, { pooling: 'mean', normalize: true });
-                            return output.data; 
+                            return { index, itemId: item.id, vector: Array.from(output.data) };
                         });
                         
-                        const chunkVectors = await Promise.all(promises);
-                        vectors.push(...chunkVectors);
+                        const results = await Promise.all(promises);
+                        for (const { index, itemId, vector } of results) {
+                            vectors[index] = vector;
+                            embeddingsToSave.set(itemId, vector);
+                        }
                         
-                        setIndexingProgress(Math.round(((i + CHUNK_SIZE) / data.length) * 100));
+                        setIndexingProgress(Math.round(((i + CHUNK_SIZE) / itemsToProcess.length) * 100));
+                        
+                        // Save incrementally
+                        if (embeddingsToSave.size >= CHUNK_SIZE) {
+                            await saveEmbeddingsToIndexedDB(embeddingsToSave);
+                            embeddingsToSave.clear();
+                        }
                         
                         await new Promise(r => setTimeout(r, 0));
+                    }
+                    
+                    // Save any remaining embeddings
+                    if (embeddingsToSave.size > 0) {
+                        await saveEmbeddingsToIndexedDB(embeddingsToSave);
                     }
                     
                     setEmbeddings(vectors);
@@ -753,19 +926,95 @@
             // Handlers
             const handleDataLoaded = async (loadedData, loadedUrlMap, metadata, loadedFileMap) => {
                 try {
+                    // Load existing data from IndexedDB for smart merging
+                    const { items: existingItems, imageMap: existingImageMap, embeddingsMap: existingEmbeddingsMap } = await loadFromIndexedDB();
+                    
+                    // Create maps for efficient lookup
+                    const existingItemsMap = new Map(existingItems.map(item => [item.id, item]));
+                    const existingImageFilenames = new Set(existingImageMap.keys());
+                    
+                    // Build merged data: existing items + new items
+                    const mergedItems = [];
+                    const newImageFileMap = new Map();
+                    const itemsNeedingEmbeddings = [];
+                    
+                    // Process new items
+                    for (const newItem of loadedData) {
+                        const existingItem = existingItemsMap.get(newItem.id);
+                        
+                        if (existingItem) {
+                            // Item exists - check if name changed (need to regenerate embedding)
+                            if (existingItem.name !== newItem.name) {
+                                itemsNeedingEmbeddings.push(newItem);
+                            }
+                            // Use existing item but update with any new data
+                            mergedItems.push({ ...existingItem, ...newItem });
+                        } else {
+                            // New item - add it
+                            mergedItems.push(newItem);
+                            itemsNeedingEmbeddings.push(newItem);
+                            
+                            // Check if this item's image is new (match by item.image property = filename)
+                            if (newItem.image && !existingImageFilenames.has(newItem.image)) {
+                                // Find the image file that matches this item's image property
+                                const imageFile = loadedFileMap.get(newItem.image);
+                                if (imageFile) {
+                                    newImageFileMap.set(newItem.image, imageFile);
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Also keep existing items that weren't in the new upload
+                    for (const existingItem of existingItems) {
+                        if (!loadedData.find(item => item.id === existingItem.id)) {
+                            mergedItems.push(existingItem);
+                        }
+                    }
+                    
+                    // Add new images that don't match existing items (by item.image property)
+                    for (const [filename, file] of loadedFileMap.entries()) {
+                        if (!existingImageFilenames.has(filename)) {
+                            // Check if any new item uses this image (by matching item.image to filename)
+                            const itemUsingImage = loadedData.find(item => item.image === filename);
+                            if (itemUsingImage && !existingItemsMap.has(itemUsingImage.id)) {
+                                newImageFileMap.set(filename, file);
+                            }
+                        }
+                    }
+                    
+                    // Index the merged data
+                    const indexedData = mergedItems.map((d, i) => ({...d, actualIndex: i}));
+                    
+                    // Build merged image map
+                    const mergedImageMap = new Map(existingImageMap);
+                    for (const [filename, url] of loadedUrlMap.entries()) {
+                        if (!mergedImageMap.has(filename)) {
+                            mergedImageMap.set(filename, url);
+                        }
+                    }
+                    // Also add new images from fileMap
+                    for (const [filename, file] of newImageFileMap.entries()) {
+                        if (!mergedImageMap.has(filename)) {
+                            mergedImageMap.set(filename, URL.createObjectURL(file));
+                        }
+                    }
+                    
+                    // Revoke old blob URLs if needed
                     if (imageMap) {
                         imageMap.forEach(url => {
-                            if (url.startsWith('blob:')) {
+                            if (url.startsWith('blob:') && !Array.from(mergedImageMap.values()).includes(url)) {
                                 URL.revokeObjectURL(url);
                             }
                         });
                     }
-
-                    const indexedData = loadedData.map((d, i) => ({...d, actualIndex: i}));
+                    
                     setData(indexedData);
-                    setImageMap(loadedUrlMap); // Use the URL map for display
-                    setEmbeddings(null); 
+                    setImageMap(mergedImageMap);
                     setHasStoredData(true);
+                    
+                    // Clear embeddings to trigger regeneration for new/changed items
+                    setEmbeddings(null);
                     
                     if (metadata && metadata.Date) {
                         setExtractionDate(metadata.Date);
@@ -773,14 +1022,15 @@
                         setExtractionDate(null);
                     }
 
-                    // STEP 1: Save Images (The heavy lifting)
-                    await saveImagesToIndexedDB(loadedFileMap);
+                    // STEP 1: Save only new images
+                    if (newImageFileMap.size > 0) {
+                        await saveImagesToIndexedDB(newImageFileMap, existingImageMap);
+                    }
 
-                    // STEP 2: Save Data
+                    // STEP 2: Save merged data
                     await saveDataToIndexedDB(indexedData, metadata);
                     
-                    // Alert user on success since console log isn't enough
-                    console.log("All data saved successfully to IndexedDB");
+                    console.log(`Merged ${mergedItems.length} items (${itemsNeedingEmbeddings.length} new/changed). Saved ${newImageFileMap.size} new images.`);
 
                 } catch (e) {
                     console.error('Error saving to IndexedDB:', e);
@@ -791,7 +1041,33 @@
             const handleUpdateItem = useCallback((actualIndex, field, value) => {
                 setData(prevData => {
                     const newData = [...prevData];
+                    const oldItem = newData[actualIndex];
                     newData[actualIndex] = { ...newData[actualIndex], [field]: value };
+                    
+                    // If name changed, regenerate embedding
+                    if (field === 'name' && oldItem.name !== value && pipeline) {
+                        (async () => {
+                            try {
+                                const output = await pipeline(`Furniture item: ${value}`, { pooling: 'mean', normalize: true });
+                                const newVector = Array.from(output.data);
+                                
+                                // Update embeddings array
+                                setEmbeddings(prevEmbeddings => {
+                                    if (!prevEmbeddings) return prevEmbeddings;
+                                    const updated = [...prevEmbeddings];
+                                    updated[actualIndex] = newVector;
+                                    return updated;
+                                });
+                                
+                                // Save to IndexedDB
+                                const embeddingsToSave = new Map();
+                                embeddingsToSave.set(newData[actualIndex].id, newVector);
+                                await saveEmbeddingsToIndexedDB(embeddingsToSave);
+                            } catch (e) {
+                                console.error('Error regenerating embedding for name change:', e);
+                            }
+                        })();
+                    }
                     
                     // Efficient Save: Only update the Items/JSON store.
                     // DO NOT re-save images here.
@@ -806,7 +1082,7 @@
                     
                     return newData;
                 });
-            }, [extractionDate]);
+            }, [extractionDate, pipeline]);
 
             const handleExport = () => {
                 if (!data) return;
