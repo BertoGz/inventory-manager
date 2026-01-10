@@ -1292,8 +1292,64 @@
                 await clearIndexedDB();
             };
 
-            const handleSaveToDesktop = () => {
-                // Placeholder - will be implemented later
+            const handleSaveToDesktop = async () => {
+                if (!data) return;
+                
+                try {
+                    // Get current date in the same format as extraction date (matching extractor format)
+                    const now = new Date();
+                    const currentDate = now.toLocaleString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        timeZoneName: 'short'
+                    });
+                    const currentTimestamp = now.getTime();
+                    
+                    // Prepare export data in the format expected by import
+                    const exportData = data.map(({actualIndex, score, ...item}) => item);
+                    const exportObject = {
+                        data: exportData,
+                        timestamp: currentTimestamp,
+                        Date: currentDate
+                    };
+                    
+                    // Get images from IndexedDB
+                    const imageBlobs = await getImagesFromIndexedDB();
+                    
+                    // Create ZIP file
+                    const zip = new JSZip();
+                    
+                    // Add data file (named exactly as import expects)
+                    zip.file("furniture_data.txt", JSON.stringify(exportObject, null, 2));
+                    
+                    // Add all images
+                    for (const [filename, blob] of imageBlobs.entries()) {
+                        zip.file(filename, blob);
+                    }
+                    
+                    // Generate ZIP and download
+                    const zipBlob = await zip.generateAsync({ type: "blob" });
+                    const url = URL.createObjectURL(zipBlob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    // Format date as YYYY-MM-DD for filename
+                    const dateStr = now.toISOString().split('T')[0];
+                    a.download = `my_vmk_furniture_${dateStr}.zip`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    console.log(`Exported ${exportData.length} items and ${imageBlobs.size} images to ZIP file.`);
+                } catch (e) {
+                    console.error('Error exporting data:', e);
+                    alert(`Error exporting data: ${e.message}`);
+                }
             };
 
             const handleExportFor = () => {
