@@ -92,6 +92,9 @@
         const X = (props) => (
             <IconBase {...props}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></IconBase>
         );
+        const ChevronDown = (props) => (
+            <IconBase {...props}><path d="m6 9 6 6 6-6"/></IconBase>
+        );
 
         // --- Constants & Helpers ---
 
@@ -389,6 +392,98 @@
         }
 
         // --- Components ---
+
+        const Modal = ({ isOpen, onClose, title, message, onConfirm, confirmText = "Confirm", cancelText = "Cancel" }) => {
+            if (!isOpen) return null;
+            
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+                    <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-lg font-semibold text-slate-200 mb-3">{title}</h3>
+                        <p className="text-slate-400 mb-6">{message}</p>
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={onClose}
+                                className="px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                            >
+                                {cancelText}
+                            </button>
+                            <button
+                                onClick={onConfirm}
+                                className="px-4 py-2 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors font-semibold"
+                            >
+                                {confirmText}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const FileMenu = ({ onSaveToDesktop, onExportFor, onClear }) => {
+            const [isOpen, setIsOpen] = useState(false);
+            const menuRef = useRef(null);
+
+            useEffect(() => {
+                const handleClickOutside = (event) => {
+                    if (menuRef.current && !menuRef.current.contains(event.target)) {
+                        setIsOpen(false);
+                    }
+                };
+
+                if (isOpen) {
+                    document.addEventListener('mousedown', handleClickOutside);
+                }
+
+                return () => {
+                    document.removeEventListener('mousedown', handleClickOutside);
+                };
+            }, [isOpen]);
+
+            return (
+                <div className="relative" ref={menuRef}>
+                    <button
+                        onClick={() => setIsOpen(!isOpen)}
+                        className="flex items-center space-x-2 px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                    >
+                        <span>File</span>
+                        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {isOpen && (
+                        <div className="absolute right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                            <button
+                                onClick={() => {
+                                    onSaveToDesktop();
+                                    setIsOpen(false);
+                                }}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
+                            >
+                                Save to Desktop
+                            </button>
+                            <button
+                                onClick={() => {
+                                    onExportFor();
+                                    setIsOpen(false);
+                                }}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
+                            >
+                                Export for...
+                            </button>
+                            <button
+                                onClick={() => {
+                                    onClear();
+                                    setIsOpen(false);
+                                }}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors border-t border-slate-700"
+                            >
+                                Clear
+                            </button>
+                        </div>
+                    )}
+                </div>
+            );
+        };
 
         const FileUploader = ({ onDataLoaded, hasExistingData }) => {
             const [loading, setLoading] = useState(false);
@@ -729,6 +824,10 @@
             const [searchQuery, setSearchQuery] = useState("");
             const [searchResults, setSearchResults] = useState(null);
             const [isSearching, setIsSearching] = useState(false);
+            
+            // Modal State
+            const [showFirstClearModal, setShowFirstClearModal] = useState(false);
+            const [showSecondClearModal, setShowSecondClearModal] = useState(false);
 
             // 0. Load from IndexedDB on mount
             useEffect(() => {
@@ -1171,18 +1270,34 @@
                 }
             };
 
-            const handleReset = async () => {
-                if (confirm("Are you sure? This will clear all data and remove it from storage.")) {
-                    if (imageMap) imageMap.forEach(url => URL.revokeObjectURL(url));
-                    setData(null);
-                    setImageMap(null);
-                    setExtractionDate(null);
-                    setHasStoredData(false);
-                    setEmbeddings(null);
-                    setIndexingProgress(0);
-                    setSearchQuery("");
-                    await clearIndexedDB();
-                }
+            const handleClear = () => {
+                setShowFirstClearModal(true);
+            };
+
+            const handleFirstClearConfirm = () => {
+                setShowFirstClearModal(false);
+                setShowSecondClearModal(true);
+            };
+
+            const handleSecondClearConfirm = async () => {
+                setShowSecondClearModal(false);
+                if (imageMap) imageMap.forEach(url => URL.revokeObjectURL(url));
+                setData(null);
+                setImageMap(null);
+                setExtractionDate(null);
+                setHasStoredData(false);
+                setEmbeddings(null);
+                setIndexingProgress(0);
+                setSearchQuery("");
+                await clearIndexedDB();
+            };
+
+            const handleSaveToDesktop = () => {
+                // Placeholder - will be implemented later
+            };
+
+            const handleExportFor = () => {
+                // Placeholder - will be implemented later
             };
 
             const displayItems = searchResults || data;
@@ -1262,19 +1377,11 @@
                                     )}
                                 </div>
 
-                                <button 
-                                    onClick={handleReset}
-                                    className="hidden sm:block px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-                                >
-                                    Reset
-                                </button>
-                                <button 
-                                    onClick={handleExport}
-                                    className="flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-lg hover:shadow-emerald-500/20 hover:scale-105 active:scale-95"
-                                >
-                                    <Save className="w-4 h-4" />
-                                    <span className="hidden sm:inline">Export</span>
-                                </button>
+                                <FileMenu 
+                                    onSaveToDesktop={handleSaveToDesktop}
+                                    onExportFor={handleExportFor}
+                                    onClear={handleClear}
+                                />
                             </div>
                         )}
                     </div>
@@ -1306,6 +1413,26 @@
                             </>
                         )}
                     </div>
+
+                    <Modal
+                        isOpen={showFirstClearModal}
+                        onClose={() => setShowFirstClearModal(false)}
+                        title="Warning"
+                        message="this will clear your inventory make sure you save to Desktop if u wish to save a copy"
+                        onConfirm={handleFirstClearConfirm}
+                        confirmText="Next"
+                        cancelText="Cancel"
+                    />
+
+                    <Modal
+                        isOpen={showSecondClearModal}
+                        onClose={() => setShowSecondClearModal(false)}
+                        title="Confirm"
+                        message="are you sure u want to clear inventory?"
+                        onConfirm={handleSecondClearConfirm}
+                        confirmText="Confirm"
+                        cancelText="Cancel"
+                    />
                 </div>
             );
         };
