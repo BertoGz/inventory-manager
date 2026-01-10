@@ -1022,6 +1022,19 @@
         );
       };
 
+      // NEW: Custom Tooltip Component
+      const Tooltip = ({ data }) => {
+        if (!data) return null;
+        return (
+          <div
+            className="fixed z-[100] bg-slate-800 border border-slate-600 text-slate-200 text-xs px-3 py-2 rounded shadow-xl pointer-events-none max-w-xs leading-relaxed"
+            style={{ top: data.y + 10, left: data.x + 10 }}
+          >
+            {data.content}
+          </div>
+        );
+      };
+
       const ExportFormatModal = ({ isOpen, onClose, onSelectFormat }) => {
         if (!isOpen) return null;
         return (
@@ -1165,7 +1178,8 @@
           viewMode,
           activePanel,
           allocations,
-          onAction,
+          sublists,
+          onTooltip,
         }) => {
           const imageUrl = imageMap.get(item.image);
           const rarityStyle = RARITY_MAP[item.rarity] || RARITY_MAP[0];
@@ -1177,6 +1191,43 @@
             : 0;
           const availableQty = (item.quantity || 0) - allocatedQty;
           const isAllocated = allocatedQty > 0;
+
+          // Build detailed allocation breakdown for tooltip
+          const getAllocationTooltip = useMemo(() => {
+            if (!isAllocated || allocatedQty === 0) return "";
+            if (!sublists || sublists.length === 0)
+              return `${allocatedQty} item${
+                allocatedQty !== 1 ? "s" : ""
+              } allocated`;
+
+            const breakdown = [];
+            sublists.forEach((list) => {
+              if (
+                list &&
+                list.type === "transfer" &&
+                list.items &&
+                Array.isArray(list.items)
+              ) {
+                const itemRecord = list.items.find(
+                  (i) => i && i.itemType === item.type
+                );
+                if (itemRecord && itemRecord.quantity > 0) {
+                  breakdown.push(
+                    `${list.name || "Unnamed List"} (${itemRecord.quantity})`
+                  );
+                }
+              }
+            });
+
+            if (breakdown.length === 0) {
+              return `${allocatedQty} item${
+                allocatedQty !== 1 ? "s" : ""
+              } allocated`;
+            }
+            return `${allocatedQty} item${
+              allocatedQty !== 1 ? "s" : ""
+            } allocated to: ${breakdown.join(", ")}`;
+          }, [isAllocated, allocatedQty, sublists, item.type]);
 
           // View Mode Logic
           const isSplitView = viewMode === "split";
@@ -1248,8 +1299,16 @@
                     </span>
                     {isAllocated && (
                       <span
-                        className="text-[10px] text-amber-500 flex items-center gap-1"
-                        title={`${allocatedQty} allocated in transfer lists`}
+                        className="text-[10px] text-amber-500 flex items-center gap-1 cursor-pointer hover:text-amber-400 transition-colors relative z-10"
+                        onMouseEnter={(e) =>
+                          onTooltip({
+                            x: e.clientX,
+                            y: e.clientY,
+                            content: getAllocationTooltip,
+                          })
+                        }
+                        onMouseLeave={() => onTooltip(null)}
+                        style={{ pointerEvents: "auto" }}
                       >
                         {allocatedQty} <Package className="w-3 h-3" />
                       </span>
@@ -1291,8 +1350,16 @@
                     />
                     {isAllocated && (
                       <div
-                        className="absolute top-0 right-full mr-2 mt-1 text-amber-500"
-                        title={`${allocatedQty} allocated`}
+                        className="absolute top-1/2 -translate-y-1/2 right-full mr-2 text-amber-500 cursor-pointer hover:text-amber-400 transition-colors z-20 flex items-center justify-center"
+                        onMouseEnter={(e) =>
+                          onTooltip({
+                            x: e.clientX,
+                            y: e.clientY,
+                            content: getAllocationTooltip,
+                          })
+                        }
+                        onMouseLeave={() => onTooltip(null)}
+                        style={{ pointerEvents: "auto" }}
                       >
                         <Package className="w-4 h-4" />
                       </div>
@@ -1380,6 +1447,8 @@
         allocations,
         onContextMenuOpen,
         contextMenu,
+        sublists,
+        onTooltip,
       }) => {
         const containerRef = useRef(null);
         const [scrollTop, setScrollTop] = useState(0);
@@ -1395,7 +1464,10 @@
           return () => resizeObserver.disconnect();
         }, []);
 
-        const handleScroll = (e) => setScrollTop(e.target.scrollTop);
+        const handleScroll = (e) => {
+          setScrollTop(e.target.scrollTop);
+          if (onTooltip) onTooltip(null); // Hide tooltip on scroll
+        };
 
         const totalHeight = items.length * ROW_HEIGHT;
         const startIndex = Math.max(
@@ -1425,6 +1497,8 @@
                 onContextMenuOpen={onContextMenuOpen}
                 contextMenu={contextMenu}
                 onContextMenuClose={() => onContextMenuOpen(null, null)}
+                sublists={sublists}
+                onTooltip={onTooltip}
               />
             );
           }
@@ -1439,6 +1513,9 @@
           activePanel,
           allocations,
           contextMenu,
+          sublists,
+          onContextMenuOpen,
+          onTooltip,
         ]);
 
         return (
@@ -1591,6 +1668,7 @@
           data: null,
         }); // type: 'create', 'qty'
         const [isResizing, setIsResizing] = useState(false);
+        const [tooltip, setTooltip] = useState(null); // { x, y, content }
 
         // Modal State
         const [showFirstClearModal, setShowFirstClearModal] = useState(false);
@@ -2115,6 +2193,8 @@
                     onContextMenuOpen(item, pos, "left")
                   }
                   contextMenu={contextMenu}
+                  sublists={sublists}
+                  onTooltip={setTooltip}
                 />
               </div>
 
@@ -2176,6 +2256,8 @@
                         onContextMenuOpen(item, pos, "right")
                       }
                       contextMenu={contextMenu}
+                      sublists={sublists}
+                      onTooltip={setTooltip}
                     />
                   </div>
                 </>
@@ -2377,6 +2459,9 @@
                 which you can share or re-open to view
               </p>
             </Modal>
+
+            {/* Tooltip Overlay */}
+            <Tooltip data={tooltip} />
 
             {/* Hidden file input for update inventory */}
             <input
