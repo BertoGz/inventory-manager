@@ -38,7 +38,7 @@
         
         /* Optimization for large lists */
         .virtual-scroller {
-            content-visibility: auto;
+            /* content-visibility: auto; removed to prevent empty view issues */
         }
 
         /* Animations */
@@ -98,21 +98,17 @@
         const BUFFER_ITEMS = 5; 
 
         const RARITY_MAP = {
-            0: { label: "Common", color: "text-gray-400 border-gray-600 bg-gray-800" },
-            1: { label: "Rare", color: "text-blue-400 border-blue-600 bg-blue-900/20" },
-            2: { label: "Ultra Rare", color: "text-purple-400 border-purple-600 bg-purple-900/20" },
-            3: { label: "Legendary", color: "text-yellow-400 border-yellow-600 bg-yellow-900/20" }
+            0: { label: "unset", color: "text-gray-400 border-gray-600 bg-gray-800" },
+            1: { label: "Common", color: "text-gray-400 border-gray-600 bg-gray-800" },
+            2: { label: "Rare", color: "text-blue-400 border-blue-600 bg-blue-900/20" },
+            3: { label: "Ultra Rare", color: "text-purple-400 border-purple-600 bg-purple-900/20" },
         };
 
-        // Cosine Similarity between two vectors
-        // Used to determine how similar the meaning of the search query is to the item name
         function cosineSimilarity(a, b) {
             let dot = 0;
             for (let i = 0; i < a.length; i++) {
                 dot += a[i] * b[i];
             }
-            // Note: Since embeddings from this model are normalized, dot product is enough.
-            // But we'll do full cosine just in case normalization varies.
             let magA = 0, magB = 0;
             for (let i = 0; i < a.length; i++) magA += a[i] * a[i];
             for (let i = 0; i < b.length; i++) magB += b[i] * b[i];
@@ -120,9 +116,170 @@
             return dot / (Math.sqrt(magA) * Math.sqrt(magB));
         }
 
+        // --- IndexedDB Helpers (FIXED & VERSION BUMPED) ---
+        const DB_NAME = 'vmkInventoryDB';
+        const DB_VERSION = 2; // Bumped version to ensure schema updates
+        const STORE_ITEMS = 'items';
+        const STORE_IMAGES = 'images';
+        const STORE_METADATA = 'metadata';
+
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve(request.result);
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains(STORE_ITEMS)) {
+                        db.createObjectStore(STORE_ITEMS, { keyPath: 'id' });
+                    }
+                    if (!db.objectStoreNames.contains(STORE_IMAGES)) {
+                        db.createObjectStore(STORE_IMAGES, { keyPath: 'filename' });
+                    }
+                    if (!db.objectStoreNames.contains(STORE_METADATA)) {
+                        db.createObjectStore(STORE_METADATA, { keyPath: 'key' });
+                    }
+                };
+            });
+        }
+
+        // 1. Separate saving Images (Heavy)
+        async function saveImagesToIndexedDB(imageFileMap) {
+            try {
+                const db = await openDB();
+                const tx = db.transaction([STORE_IMAGES], 'readwrite');
+                const imagesStore = tx.objectStore(STORE_IMAGES);
+                
+                // Clear old images first
+                imagesStore.clear();
+
+                for (const [filename, fileObj] of imageFileMap.entries()) {
+                    imagesStore.put({ filename, blob: fileObj });
+                }
+
+                await new Promise((resolve, reject) => {
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                    tx.onabort = () => reject(new Error("Image transaction aborted"));
+                });
+                console.log("Images saved successfully.");
+            } catch (e) {
+                console.error("Failed to save images:", e);
+                throw e;
+            }
+        }
+
+        // 2. Efficient Data Saver
+        async function saveDataToIndexedDB(items, metadata) {
+            try {
+                if (!items || items.length === 0) {
+                    console.warn("Attempted to save empty items list to DB");
+                    return;
+                }
+
+                const db = await openDB();
+                const tx = db.transaction([STORE_ITEMS, STORE_METADATA], 'readwrite');
+                
+                // Save items
+                const itemsStore = tx.objectStore(STORE_ITEMS);
+                itemsStore.clear(); // Clear old items
+                
+                let putCount = 0;
+                items.forEach(item => {
+                    try {
+                        itemsStore.put(item);
+                        putCount++;
+                    } catch (err) {
+                        console.error("Error putting item:", item, err);
+                    }
+                });
+
+                // Save metadata
+                if (metadata) {
+                    const metadataStore = tx.objectStore(STORE_METADATA);
+                    metadataStore.put({ key: 'extraction', ...metadata });
+                }
+
+                await new Promise((resolve, reject) => {
+                    tx.oncomplete = () => {
+                        console.log(`Successfully saved ${putCount} items to DB.`);
+                        resolve();
+                    };
+                    tx.onerror = () => reject(tx.error);
+                    tx.onabort = () => reject(new Error("Data transaction aborted"));
+                });
+            } catch (e) {
+                console.error("Failed to save data:", e);
+                throw e;
+            }
+        }
+
+        async function loadFromIndexedDB() {
+            try {
+                const db = await openDB();
+                const tx = db.transaction([STORE_ITEMS, STORE_IMAGES, STORE_METADATA], 'readonly');
+                
+                // Load items
+                const itemsStore = tx.objectStore(STORE_ITEMS);
+                const items = await new Promise((resolve, reject) => {
+                    const req = itemsStore.getAll();
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+
+                // Load images
+                const imagesStore = tx.objectStore(STORE_IMAGES);
+                const imageRecords = await new Promise((resolve, reject) => {
+                    const req = imagesStore.getAll();
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+
+                // Convert image blobs back to object URLs
+                const imageMap = new Map();
+                for (const record of imageRecords) {
+                    imageMap.set(record.filename, URL.createObjectURL(record.blob));
+                }
+
+                // Load metadata
+                const metadataStore = tx.objectStore(STORE_METADATA);
+                const metadataRecord = await new Promise((resolve, reject) => {
+                    const req = metadataStore.get('extraction');
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+
+                const metadata = metadataRecord ? { 
+                    timestamp: metadataRecord.timestamp, 
+                    Date: metadataRecord.Date 
+                } : null;
+
+                return { items, imageMap, metadata };
+            } catch (e) {
+                console.error('Error loading from IndexedDB:', e);
+                return { items: [], imageMap: new Map(), metadata: null };
+            }
+        }
+
+        async function clearIndexedDB() {
+            try {
+                const db = await openDB();
+                const tx = db.transaction([STORE_ITEMS, STORE_IMAGES, STORE_METADATA], 'readwrite');
+                await tx.objectStore(STORE_ITEMS).clear();
+                await tx.objectStore(STORE_IMAGES).clear();
+                await tx.objectStore(STORE_METADATA).clear();
+                await new Promise((resolve, reject) => {
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+            } catch (e) {
+                console.error('Error clearing IndexedDB:', e);
+            }
+        }
+
         // --- Components ---
 
-        const FileUploader = ({ onDataLoaded }) => {
+        const FileUploader = ({ onDataLoaded, hasExistingData }) => {
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState(null);
             const inputRef = useRef(null);
@@ -135,6 +292,17 @@
             }, []);
 
             const handleFolderSelect = async (e) => {
+                if (hasExistingData) {
+                    const confirmed = confirm(
+                        "⚠️ Warning: Uploading a new file will replace all existing data.\n\n" +
+                        "Do you want to continue?"
+                    );
+                    if (!confirmed) {
+                        e.target.value = ''; 
+                        return;
+                    }
+                }
+
                 setLoading(true);
                 setError(null);
                 
@@ -143,19 +311,25 @@
                     if (files.length === 0) throw new Error("No folder selected or folder is empty.");
 
                     const dataFile = files.find(f => f.name.toLowerCase() === "furniture_data.txt" || f.name.toLowerCase().endsWith(".json"));
-                    if (!dataFile) throw new Error("Could not find 'furniture_data.txt' inside the selected folder.");
+                    if (!dataFile) throw new Error("Could not find 'furniture_data.txt'.");
 
-                    const imageMap = new Map();
+                    const urlMap = new Map();
+                    const fileMap = new Map(); // Store Raw Files for DB saving
+
                     files.forEach(file => {
                         if (file.type.startsWith('image/')) {
-                            imageMap.set(file.name, URL.createObjectURL(file));
+                            // URL for immediate display
+                            urlMap.set(file.name, URL.createObjectURL(file));
+                            // Raw File for DB saving (Fixes transaction bugs)
+                            fileMap.set(file.name, file);
                         }
                     });
 
                     const text = await readFileAsText(dataFile);
-                    const enrichedData = parseAndEnrichData(text);
+                    const { data: enrichedData, metadata } = parseAndEnrichData(text);
                     
-                    onDataLoaded(enrichedData, imageMap);
+                    // Pass both maps
+                    onDataLoaded(enrichedData, urlMap, metadata, fileMap);
 
                 } catch (err) {
                     console.error(err);
@@ -176,25 +350,66 @@
 
             const parseAndEnrichData = (rawText) => {
                 let text = rawText.trim();
+                // Handle trailing commas if present
                 if (text.endsWith(',') || text.endsWith(',]')) text = text.replace(/,(\s*\]?)$/, '$1');
-                if (!text.startsWith('[') && text.includes('{')) text = `[${text}]`;
-
+                
+                // FIXED: Don't blindly wrap in brackets. Try parsing first.
+                let json;
                 try {
-                    const json = JSON.parse(text);
-                    if (!Array.isArray(json)) throw new Error("File content is not a JSON array.");
-
-                    return json.map((item, idx) => ({
-                        id: item.id || `temp-${idx}`,
-                        ...item,
-                        name: item.name || "Unknown Item",
-                        image: item.image || "",
-                        quantity: item.count !== undefined ? item.count : (item.quantity || 0), 
-                        price: item.price !== undefined ? item.price : 0,
-                        rarity: item.rarity !== undefined ? item.rarity : 0
-                    }));
+                    json = JSON.parse(text);
                 } catch (e) {
-                    throw new Error("Failed to parse JSON. Ensure the file contains a valid JSON array.");
+                    // Fallback: Try wrapping in brackets (for bare object lists)
+                    try {
+                        json = JSON.parse(`[${text}]`);
+                    } catch (e2) {
+                        throw new Error("Failed to parse JSON. Ensure the file contains a valid JSON array.");
+                    }
                 }
+                
+                // Handle new format with metadata (object with data property)
+                let dataArray;
+                let metadata = null;
+
+                // Helper to extract if it's the root object
+                const extractFromObject = (obj) => {
+                    if (obj && typeof obj === 'object' && obj.data && Array.isArray(obj.data)) {
+                        return {
+                            data: obj.data,
+                            meta: { timestamp: obj.timestamp, Date: obj.Date }
+                        };
+                    }
+                    return null;
+                };
+
+                // Check direct object
+                let extracted = extractFromObject(json);
+                
+                // Check if it got wrapped in an array accidentally or intentionally (length 1 array containing the root object)
+                if (!extracted && Array.isArray(json) && json.length === 1) {
+                    extracted = extractFromObject(json[0]);
+                }
+
+                if (extracted) {
+                    dataArray = extracted.data;
+                    metadata = extracted.meta;
+                } else if (Array.isArray(json)) {
+                    // Old format (direct array of items)
+                    dataArray = json;
+                } else {
+                    throw new Error("File content is not a valid JSON array or object with data property.");
+                }
+
+                const enrichedData = dataArray.map((item, idx) => ({
+                    id: item.id || `temp-${idx}`,
+                    ...item,
+                    name: item.name || "Unknown Item",
+                    image: item.image || "",
+                    quantity: item.count !== undefined ? item.count : (item.quantity || 0), 
+                    price: item.price !== undefined ? item.price : 0,
+                    rarity: item.rarity !== undefined ? item.rarity : 0
+                }));
+
+                return { data: enrichedData, metadata };
             };
 
             return (
@@ -209,7 +424,7 @@
                         </h1>
                         
                         <p className="text-slate-400 mb-8 leading-relaxed">
-                            Select the folder containing your <code className="bg-slate-800 px-2 py-1 rounded text-blue-300 font-mono text-sm border border-slate-700">furniture_data.txt</code> file and its corresponding images.
+                            Select the folder containing your data file and images.
                         </p>
 
                         <label className="relative group flex items-center justify-center px-6 py-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] w-full shadow-lg hover:shadow-blue-500/25">
@@ -353,8 +568,6 @@
                 const rows = [];
                 for (let i = startIndex; i <= endIndex; i++) {
                     const item = items[i];
-                    // IMPORTANT: We pass index+1 for display, but item.actualIndex is used for updates
-                    // This handles cases where the list is filtered (searched)
                     rows.push(
                         <ItemRow 
                             key={item.id || i} 
@@ -391,11 +604,14 @@
             // Data & State
             const [data, setData] = useState(null);
             const [imageMap, setImageMap] = useState(null);
+            const [extractionDate, setExtractionDate] = useState(null);
+            const [isLoadingFromDB, setIsLoadingFromDB] = useState(true);
+            const [hasStoredData, setHasStoredData] = useState(false);
             
             // AI State
             const [pipeline, setPipeline] = useState(null);
             const [embeddings, setEmbeddings] = useState(null);
-            const [indexingProgress, setIndexingProgress] = useState(0); // 0 to 100
+            const [indexingProgress, setIndexingProgress] = useState(0); 
             const [isAIReady, setIsAIReady] = useState(false);
             
             // Search State
@@ -403,17 +619,40 @@
             const [searchResults, setSearchResults] = useState(null);
             const [isSearching, setIsSearching] = useState(false);
 
+            // 0. Load from IndexedDB on mount
+            useEffect(() => {
+                const loadData = async () => {
+                    try {
+                        const { items, imageMap: loadedImageMap, metadata } = await loadFromIndexedDB();
+                        if (items && items.length > 0) {
+                            const indexedData = items.map((d, i) => ({...d, actualIndex: i}));
+                            setData(indexedData);
+                            setImageMap(loadedImageMap);
+                            setHasStoredData(true);
+                            if (metadata) {
+                                setExtractionDate(metadata.Date);
+                            }
+                        } else {
+                            setHasStoredData(false);
+                        }
+                    } catch (e) {
+                        console.error('Error loading from IndexedDB:', e);
+                        setHasStoredData(false);
+                    } finally {
+                        setIsLoadingFromDB(false);
+                    }
+                };
+                loadData();
+            }, []);
+
             // 1. Initialize Transformers Pipeline
             useEffect(() => {
                 const initAI = async () => {
                     if (!window.pipeline) return; 
 
                     try {
-                        // Load model (runs once)
-                        // feature-extraction task converts text to vectors
-                        // Xenova/all-MiniLM-L6-v2 is small (~40MB) and good for semantic search
                         const pipe = await window.pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', {
-                            quantized: true // Use smaller quantized model
+                            quantized: true 
                         });
                         setPipeline(() => pipe);
                         setIsAIReady(true);
@@ -422,7 +661,6 @@
                     }
                 };
 
-                // Simple polling to wait for module script to load
                 const checkInterval = setInterval(() => {
                     if (window.pipeline) {
                         clearInterval(checkInterval);
@@ -441,25 +679,19 @@
                     const vectors = [];
                     setIndexingProgress(0);
                     
-                    // Process in chunks to avoid blocking UI
                     const CHUNK_SIZE = 10;
                     for (let i = 0; i < data.length; i += CHUNK_SIZE) {
                         const chunk = data.slice(i, i + CHUNK_SIZE);
                         const promises = chunk.map(async (item) => {
-                            // Run model on item name with context prefix to improve semantic separation
-                            // e.g. "Furniture item: Floor" is less similar to "Furniture item: Stool" 
-                            // than "Furniture item: Chair" is.
                             const output = await pipeline(`Furniture item: ${item.name}`, { pooling: 'mean', normalize: true });
-                            return output.data; // Float32Array
+                            return output.data; 
                         });
                         
                         const chunkVectors = await Promise.all(promises);
                         vectors.push(...chunkVectors);
                         
-                        // Update progress
                         setIndexingProgress(Math.round(((i + CHUNK_SIZE) / data.length) * 100));
                         
-                        // Yield to main thread
                         await new Promise(r => setTimeout(r, 0));
                     }
                     
@@ -478,7 +710,6 @@
                 }
 
                 if (!embeddings || !pipeline) {
-                    // Fallback to simple text search if AI isn't ready
                     const lowerQuery = searchQuery.toLowerCase();
                     const filtered = data.filter(item => 
                         item.name.toLowerCase().includes(lowerQuery) || 
@@ -491,36 +722,28 @@
                 const runSearch = async () => {
                     setIsSearching(true);
                     
-                    // Embed query with same context prefix
                     const queryOutput = await pipeline(`Furniture item: ${searchQuery}`, { pooling: 'mean', normalize: true });
                     const queryVector = queryOutput.data;
 
-                    // Calculate scores with Hybrid Search (Semantic + Keyword Boost)
                     const lowerQuery = searchQuery.toLowerCase();
                     
                     const scoredItems = data.map((item, index) => {
                         let score = cosineSimilarity(queryVector, embeddings[index]);
                         
-                        // Boost exact/partial keyword matches
-                        // This ensures "Bar Stool" always beats "Chair" when searching for "Stool"
                         if (item.name.toLowerCase().includes(lowerQuery)) {
                             score += 1.0; 
                         }
                         
-                        return { ...item, score, actualIndex: index }; // Keep track of original index
+                        return { ...item, score, actualIndex: index }; 
                     });
 
-                    // Sort by score descending
                     scoredItems.sort((a, b) => b.score - a.score);
-
-                    // Filter threshold
                     const filtered = scoredItems.filter(item => item.score > 0.25);
 
                     setSearchResults(filtered);
                     setIsSearching(false);
                 };
 
-                // Debounce
                 const timeoutId = setTimeout(runSearch, 300);
                 return () => clearTimeout(timeoutId);
 
@@ -528,25 +751,66 @@
 
 
             // Handlers
-            const handleDataLoaded = (loadedData, loadedImages) => {
-                // Add actualIndex property to allow updates to map back to original array
-                const indexedData = loadedData.map((d, i) => ({...d, actualIndex: i}));
-                setData(indexedData);
-                setImageMap(loadedImages);
-                setEmbeddings(null); // Reset embeddings for new data
+            const handleDataLoaded = async (loadedData, loadedUrlMap, metadata, loadedFileMap) => {
+                try {
+                    if (imageMap) {
+                        imageMap.forEach(url => {
+                            if (url.startsWith('blob:')) {
+                                URL.revokeObjectURL(url);
+                            }
+                        });
+                    }
+
+                    const indexedData = loadedData.map((d, i) => ({...d, actualIndex: i}));
+                    setData(indexedData);
+                    setImageMap(loadedUrlMap); // Use the URL map for display
+                    setEmbeddings(null); 
+                    setHasStoredData(true);
+                    
+                    if (metadata && metadata.Date) {
+                        setExtractionDate(metadata.Date);
+                    } else {
+                        setExtractionDate(null);
+                    }
+
+                    // STEP 1: Save Images (The heavy lifting)
+                    await saveImagesToIndexedDB(loadedFileMap);
+
+                    // STEP 2: Save Data
+                    await saveDataToIndexedDB(indexedData, metadata);
+                    
+                    // Alert user on success since console log isn't enough
+                    console.log("All data saved successfully to IndexedDB");
+
+                } catch (e) {
+                    console.error('Error saving to IndexedDB:', e);
+                    alert(`Error saving to storage: ${e.message}\n\nYour data is loaded but may not persist after closing the browser.`);
+                }
             };
 
             const handleUpdateItem = useCallback((actualIndex, field, value) => {
                 setData(prevData => {
                     const newData = [...prevData];
                     newData[actualIndex] = { ...newData[actualIndex], [field]: value };
+                    
+                    // Efficient Save: Only update the Items/JSON store.
+                    // DO NOT re-save images here.
+                    clearTimeout(window._saveTimeout);
+                    window._saveTimeout = setTimeout(async () => {
+                        try {
+                             await saveDataToIndexedDB(newData, extractionDate ? { timestamp: Date.now(), Date: extractionDate } : null);
+                        } catch (e) {
+                            console.error('Error auto-saving changes:', e);
+                        }
+                    }, 1000); 
+                    
                     return newData;
                 });
-            }, []);
+            }, [extractionDate]);
 
             const handleExport = () => {
                 if (!data) return;
-                const exportData = data.map(({actualIndex, score, ...item}) => item); // Remove internal props
+                const exportData = data.map(({actualIndex, score, ...item}) => item); 
                 const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "text/plain" });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
@@ -558,36 +822,35 @@
                 URL.revokeObjectURL(url);
             };
 
-            const handleReset = () => {
-                if (confirm("Are you sure? Unsaved changes will be lost.")) {
+            const handleReset = async () => {
+                if (confirm("Are you sure? This will clear all data and remove it from storage.")) {
                     if (imageMap) imageMap.forEach(url => URL.revokeObjectURL(url));
                     setData(null);
                     setImageMap(null);
+                    setExtractionDate(null);
+                    setHasStoredData(false);
                     setEmbeddings(null);
                     setIndexingProgress(0);
                     setSearchQuery("");
+                    await clearIndexedDB();
                 }
             };
 
-            // Determine what to display
             const displayItems = searchResults || data;
 
             return (
                 <div className="flex flex-col h-screen w-full bg-slate-950 text-slate-100 font-sans overflow-hidden">
                     <div className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between shadow-xl z-10 shrink-0 gap-4">
-                        {/* Left: Logo & Title */}
                         <div className="flex items-center space-x-3 shrink-0">
-                            {/* Logo Image: Expects 'logo.png' in the same folder. Falls back to icon on error. */}
                             <img 
                                 src="./logo.png" 
                                 alt="Logo" 
-                                className="w-10 h-10 rounded-lg shadow-lg shadow-blue-900/20 object-contain bg-slate-800 border border-slate-700"
+                                className="w-16 h-12 rounded-lg shadow-lg shadow-blue-900/20 object-contain bg-slate-800 border border-slate-700"
                                 onError={(e) => {
                                     e.target.style.display = 'none';
                                     e.target.nextSibling.style.display = 'flex';
                                 }}
                             />
-                            {/* Fallback Icon (Hidden unless image fails) */}
                             <div className="hidden bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-900/20 items-center justify-center">
                                 <Package className="text-white w-5 h-5" />
                             </div>
@@ -595,16 +858,20 @@
                             <div className="hidden md:block">
                                 <h1 className="text-lg font-bold tracking-tight text-white">Inventory Manager</h1>
                                 {data && (
-                                    <div className="flex items-center gap-2 mt-0.5">
+                                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                         <span className="bg-slate-800 text-slate-400 text-[10px] px-1.5 py-0.5 rounded border border-slate-700">
                                             {data.length.toLocaleString()} items
                                         </span>
+                                        {extractionDate && (
+                                            <span className="bg-slate-800 text-slate-400 text-[10px] px-1.5 py-0.5 rounded border border-slate-700" title="Data extraction date">
+                                                Extracted: {extractionDate}
+                                            </span>
+                                        )}
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        {/* Center: Search Bar & AI Status */}
                         {data && (
                             <div className="flex-1 max-w-xl relative group">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -626,7 +893,6 @@
                                     </button>
                                 )}
                                 
-                                {/* AI Status / Progress Bar */}
                                 {indexingProgress < 100 && indexingProgress > 0 && (
                                     <div className="absolute -bottom-3 left-0 w-full h-1 bg-slate-800 rounded-full overflow-hidden">
                                         <div 
@@ -638,10 +904,8 @@
                             </div>
                         )}
 
-                        {/* Right: Actions */}
                         {data && (
                             <div className="flex items-center space-x-3 shrink-0">
-                                {/* AI Indicator */}
                                 <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 rounded-lg border border-slate-800" title={embeddings ? "AI Ready" : "Loading Model..."}>
                                     <Brain className={`w-4 h-4 ${isAIReady ? 'text-purple-400' : 'text-slate-600 animate-pulse'}`} />
                                     {indexingProgress < 100 && indexingProgress > 0 && (
@@ -667,8 +931,13 @@
                     </div>
 
                     <div className="flex-1 overflow-hidden relative flex flex-col">
-                        {!data ? (
-                            <FileUploader onDataLoaded={handleDataLoaded} />
+                        {isLoadingFromDB ? (
+                            <div className="flex flex-col items-center justify-center h-full space-y-4 text-slate-400">
+                                <RefreshCw className="w-8 h-8 animate-spin" />
+                                <span>Loading saved data...</span>
+                            </div>
+                        ) : !data ? (
+                            <FileUploader onDataLoaded={handleDataLoaded} hasExistingData={hasStoredData} />
                         ) : (
                             <>
                                 <div className="flex items-center bg-slate-900/80 backdrop-blur border-b border-slate-800 px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0 select-none">
