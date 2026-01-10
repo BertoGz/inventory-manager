@@ -974,14 +974,55 @@
             );
         };
 
-        const ItemRow = React.memo(({ item, index, style, imageMap, onUpdate }) => {
+        const ItemRow = React.memo(({ item, index, style, imageMap, onUpdate, onReplaceImage, contextMenu, onContextMenuOpen, onContextMenuClose }) => {
             const imageUrl = imageMap.get(item.image);
             const rarityStyle = RARITY_MAP[item.rarity] || RARITY_MAP[0];
+            const isContextMenuOpen = contextMenu?.itemType === item.type;
+            const fileInputRef = useRef(null);
+
+            const handleContextMenu = (e) => {
+                // Allow default context menu on the name area for copy/paste
+                const target = e.target;
+                const isNameArea = target.closest('.item-name-area');
+                
+                if (isNameArea) {
+                    // Don't prevent default - allow browser context menu
+                    return;
+                }
+                
+                e.preventDefault();
+                e.stopPropagation();
+                // Position menu near cursor, but adjust if it would go off-screen
+                const x = e.clientX;
+                const y = e.clientY;
+                onContextMenuOpen(item.type, { x, y });
+            };
+
+            const handleReplaceImage = () => {
+                onContextMenuClose();
+                fileInputRef.current?.click();
+            };
+
+            const handleFileChange = async (e) => {
+                const file = e.target.files[0];
+                if (!file || !file.type.startsWith('image/')) {
+                    alert('Please select a valid image file.');
+                    e.target.value = '';
+                    return;
+                }
+
+                if (onReplaceImage) {
+                    await onReplaceImage(item, file);
+                }
+                e.target.value = '';
+            };
 
             return (
+                <>
                 <div 
                     style={style} 
                     className="absolute w-full flex items-center border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors px-4 group"
+                        onContextMenu={handleContextMenu}
                 >
                     <div className="w-12 text-slate-600 text-sm font-mono flex-shrink-0">{index + 1}</div>
 
@@ -1002,7 +1043,7 @@
                         </div>
                     </div>
 
-                    <div className="flex-1 px-4 min-w-0">
+                    <div className="flex-1 px-4 min-w-0 item-name-area">
                         <div className="font-medium text-slate-200 truncate group-hover:text-blue-300 transition-colors" title={item.name}>
                             {item.name}
                         </div>
@@ -1054,13 +1095,41 @@
                         </select>
                     </div>
                 </div>
+                    {isContextMenuOpen && (
+                        <div 
+                            className="fixed z-[100] bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 min-w-[180px] context-menu-container"
+                            style={{ 
+                                left: `${Math.min(contextMenu.position.x, window.innerWidth - 200)}px`, 
+                                top: `${Math.min(contextMenu.position.y, window.innerHeight - 100)}px`
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            onContextMenu={(e) => e.preventDefault()}
+                        >
+                            <button
+                                onClick={handleReplaceImage}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors flex items-center gap-2"
+                            >
+                                <ImageIcon className="w-4 h-4" />
+                                Replace Image
+                            </button>
+                        </div>
+                    )}
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleFileChange}
+                    />
+                </>
             );
         });
 
-        const VirtualList = ({ items, imageMap, onUpdateItem }) => {
+        const VirtualList = ({ items, imageMap, onUpdateItem, onReplaceImage }) => {
             const containerRef = useRef(null);
             const [scrollTop, setScrollTop] = useState(0);
             const [containerHeight, setContainerHeight] = useState(0);
+            const [contextMenu, setContextMenu] = useState(null);
 
             useEffect(() => {
                 if (!containerRef.current) return;
@@ -1072,6 +1141,28 @@
                 resizeObserver.observe(containerRef.current);
                 return () => resizeObserver.disconnect();
             }, []);
+
+            useEffect(() => {
+                const handleClickOutside = (e) => {
+                    if (contextMenu && !e.target.closest('.context-menu-container')) {
+                        setContextMenu(null);
+                    }
+                };
+                document.addEventListener('click', handleClickOutside);
+                document.addEventListener('contextmenu', handleClickOutside);
+                return () => {
+                    document.removeEventListener('click', handleClickOutside);
+                    document.removeEventListener('contextmenu', handleClickOutside);
+                };
+            }, [contextMenu]);
+
+            const handleContextMenuOpen = (itemType, position) => {
+                setContextMenu({ itemType, position });
+            };
+
+            const handleContextMenuClose = () => {
+                setContextMenu(null);
+            };
 
             const handleScroll = (e) => {
                 setScrollTop(e.target.scrollTop);
@@ -1097,11 +1188,15 @@
                             style={{ top: i * ROW_HEIGHT, height: ROW_HEIGHT }}
                             imageMap={imageMap}
                             onUpdate={onUpdateItem}
+                            onReplaceImage={onReplaceImage}
+                            contextMenu={contextMenu}
+                            onContextMenuOpen={handleContextMenuOpen}
+                            onContextMenuClose={handleContextMenuClose}
                         />
                     );
                 }
                 return rows;
-            }, [startIndex, endIndex, items, imageMap, onUpdateItem]);
+            }, [startIndex, endIndex, items, imageMap, onUpdateItem, onReplaceImage, contextMenu]);
 
             return (
                 <div 
@@ -1519,6 +1614,72 @@
                     console.error('Error saving item:', e);
                 }
             };
+
+            const handleReplaceImage = useCallback(async (item, newImageFile) => {
+                if (!item || !newImageFile) {
+                    console.error('Invalid item or image file');
+                    return;
+                }
+
+                try {
+                    // If item doesn't have an image filename, generate one based on type or id
+                    let filename = item.image;
+                    let needsDataUpdate = false;
+                    
+                    if (!filename || filename.trim() === '') {
+                        // Generate filename from item type or id, with appropriate extension
+                        const baseName = item.type || item.id || `item_${item.actualIndex}`;
+                        // Get file extension from the new image file
+                        const fileExtension = newImageFile.name.split('.').pop() || 'jpg';
+                        filename = `${baseName}.${fileExtension}`;
+                        needsDataUpdate = true;
+                    }
+
+                    const oldImageUrl = imageMap?.get(filename);
+
+                    // Create new blob URL
+                    const newImageUrl = URL.createObjectURL(newImageFile);
+
+                    // Update imageMap state first so UI updates immediately
+                    setImageMap(prevMap => {
+                        const newMap = new Map(prevMap);
+                        // Revoke old blob URL if it exists
+                        if (oldImageUrl && oldImageUrl.startsWith('blob:')) {
+                            URL.revokeObjectURL(oldImageUrl);
+                        }
+                        newMap.set(filename, newImageUrl);
+                        return newMap;
+                    });
+
+                    // Update the item's image field in the data if needed
+                    if (needsDataUpdate) {
+                        setData(prevData => {
+                            const newData = [...prevData];
+                            // Find item by type (primary key) or actualIndex
+                            const itemIndex = newData.findIndex(d => 
+                                (item.type && d.type === item.type) || 
+                                (item.actualIndex !== undefined && d.actualIndex === item.actualIndex)
+                            );
+                            if (itemIndex !== -1) {
+                                newData[itemIndex] = { ...newData[itemIndex], image: filename };
+                                // Save updated item to IndexedDB
+                                saveItemToDB(newData[itemIndex]);
+                            }
+                            return newData;
+                        });
+                    }
+
+                    // Save to IndexedDB
+                    const imageFileMap = new Map();
+                    imageFileMap.set(filename, newImageFile);
+                    await saveImagesToIndexedDB(imageFileMap);
+
+                    console.log(`Replaced image for ${item.name} (${filename})`);
+                } catch (e) {
+                    console.error('Error replacing image:', e);
+                    alert(`Error replacing image: ${e.message}`);
+                }
+            }, [imageMap]);
 
             const handleUpdateItem = useCallback((actualIndex, field, value, saveImmediately = false) => {
                 setData(prevData => {
@@ -2440,6 +2601,7 @@
                                     items={displayItems} 
                                     imageMap={imageMap} 
                                     onUpdateItem={handleUpdateItem} 
+                                    onReplaceImage={handleReplaceImage}
                                 />
                             </>
                         )}
