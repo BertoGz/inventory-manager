@@ -816,6 +816,7 @@
                             value={item.quantity}
                             min="0"
                             onChange={(e) => onUpdate(item.actualIndex, 'quantity', parseInt(e.target.value) || 0)}
+                            onBlur={(e) => onUpdate(item.actualIndex, 'quantity', parseInt(e.target.value) || 0, true)}
                         />
                     </div>
 
@@ -830,6 +831,7 @@
                                 placeholder="0"
                                 min="0"
                                 onChange={(e) => onUpdate(item.actualIndex, 'price', e.target.value)}
+                                onBlur={(e) => onUpdate(item.actualIndex, 'price', e.target.value, true)}
                             />
                         </div>
                     </div>
@@ -1299,7 +1301,22 @@
                 }
             };
 
-            const handleUpdateItem = useCallback((actualIndex, field, value) => {
+            const saveItemToDB = async (item) => {
+                try {
+                    const db = await openDB();
+                    const tx = db.transaction([STORE_ITEMS], 'readwrite');
+                    const itemsStore = tx.objectStore(STORE_ITEMS);
+                    itemsStore.put(item);
+                    await new Promise((resolve, reject) => {
+                        tx.oncomplete = () => resolve();
+                        tx.onerror = () => reject(tx.error);
+                    });
+                } catch (e) {
+                    console.error('Error saving item:', e);
+                }
+            };
+
+            const handleUpdateItem = useCallback((actualIndex, field, value, saveImmediately = false) => {
                 setData(prevData => {
                     const newData = [...prevData];
                     const oldItem = newData[actualIndex];
@@ -1330,16 +1347,31 @@
                         })();
                     }
                     
-                    // Efficient Save: Only update the Items/JSON store.
+                    // Efficient Save: Only update the single changed item
                     // DO NOT re-save images here.
-                    clearTimeout(window._saveTimeout);
-                    window._saveTimeout = setTimeout(async () => {
-                        try {
-                             await saveDataToIndexedDB(newData, extractionDate ? { timestamp: Date.now(), Date: extractionDate } : null);
-                        } catch (e) {
-                            console.error('Error auto-saving changes:', e);
+                    const updatedItem = newData[actualIndex];
+                    
+                    if (saveImmediately) {
+                        // Save immediately on blur
+                        saveItemToDB(updatedItem);
+                        // Clear any pending debounced save for this item
+                        if (window._saveTimeouts && window._saveTimeouts[actualIndex]) {
+                            clearTimeout(window._saveTimeouts[actualIndex]);
+                            delete window._saveTimeouts[actualIndex];
                         }
-                    }, 1000); 
+                    } else {
+                        // Debounced save after 10 seconds of no typing
+                        if (!window._saveTimeouts) {
+                            window._saveTimeouts = {};
+                        }
+                        if (window._saveTimeouts[actualIndex]) {
+                            clearTimeout(window._saveTimeouts[actualIndex]);
+                        }
+                        window._saveTimeouts[actualIndex] = setTimeout(async () => {
+                            await saveItemToDB(updatedItem);
+                            delete window._saveTimeouts[actualIndex];
+                        }, 10000); // 10 seconds
+                    }
                     
                     return newData;
                 });
@@ -2246,7 +2278,7 @@
                         isOpen={showSaveToDesktopModal}
                         onClose={() => setShowSaveToDesktopModal(false)}
                         title="Save to Desktop"
-                        message="this will save a local copy of your inventory on your desktop, which you can share or re-open to view"
+                        message="this will save a local copy of your inventory to your desktop, which you can share or re-open to view"
                         onConfirm={handleSaveToDesktopConfirm}
                         confirmText="Save"
                         cancelText="Cancel"
