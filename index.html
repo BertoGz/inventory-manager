@@ -2609,8 +2609,8 @@
                     <Modal
                         isOpen={showFirstClearModal}
                         onClose={() => setShowFirstClearModal(false)}
-                        title="Warning"
-                        message="This will clear your inventory manager. Make sure you have saved a copy to your Desktop."
+                        title="Delete Inventory?"
+                        message="This will clear your inventory manager. Make sure you have already saved a copy to your Desktop."
                         onConfirm={handleFirstClearConfirm}
                         confirmText="Next"
                         cancelText="Cancel"
@@ -2620,7 +2620,7 @@
                         isOpen={showSecondClearModal}
                         onClose={() => setShowSecondClearModal(false)}
                         title="Confirm"
-                        message="are you sure u want to clear your inventory manager?"
+                        message="Are you sure u want to clear your inventory manager?"
                         onConfirm={handleSecondClearConfirm}
                         confirmText="Confirm"
                         cancelText="Cancel"
