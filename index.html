@@ -1,30 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Manager + AI</title>
-    
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
+
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
+
     <!-- Babel for in-browser JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
+
     <!-- JSZip for ZIP export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <!-- SheetJS for Excel export (fallback) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <!-- ExcelJS for Excel export with image support -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+
+    <!-- jsPDF for PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <!-- sql.js for SQLite database creation -->
+    <script src="https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/sql-wasm.js"></script>
 
     <!-- Transformers.js (AI Model) -->
     <script type="module">
         import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.16.0';
-        
+
         // Skip local model checks since we are in a browser without a file system
         env.allowLocalModels = false;
-        
+
         // Attach to window so our React app can use it
         window.pipeline = pipeline;
         window.transformersLoaded = true;
@@ -32,26 +45,53 @@
 
     <style>
         /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 10px; height: 10px; }
-        ::-webkit-scrollbar-track { background: #0f172a; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 5px; border: 2px solid #0f172a; }
-        ::-webkit-scrollbar-thumb:hover { background: #475569; }
-        input[type=number]::-webkit-inner-spin-button, 
-        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 5px;
+            border: 2px solid #0f172a;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
         /* Optimization for large lists */
         /* .virtual-scroller - content-visibility: auto; removed to prevent empty view issues */
 
         /* Animations */
         @keyframes pulse-subtle {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
         }
+
         .animate-pulse-subtle {
             animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
     </style>
 </head>
+
 <body class="bg-slate-950 text-slate-100 overflow-hidden">
     <div id="root"></div>
 
@@ -66,40 +106,40 @@
         );
 
         const FolderOpen = (props) => (
-            <IconBase {...props}><path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-3.25 7a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></IconBase>
+            <IconBase {...props}><path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-3.25 7a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" /></IconBase>
         );
         const Package = (props) => (
-            <IconBase {...props}><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22v-9"/></IconBase>
+            <IconBase {...props}><path d="m7.5 4.27 9 5.15" /><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" /><path d="m3.3 7 8.7 5 8.7-5" /><path d="M12 22v-9" /></IconBase>
         );
         const Save = (props) => (
-            <IconBase {...props}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></IconBase>
+            <IconBase {...props}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></IconBase>
         );
         const AlertCircle = (props) => (
-            <IconBase {...props}><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></IconBase>
+            <IconBase {...props}><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></IconBase>
         );
         const ImageIcon = (props) => (
-            <IconBase {...props}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></IconBase>
+            <IconBase {...props}><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></IconBase>
         );
         const RefreshCw = (props) => (
-            <IconBase {...props}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></IconBase>
+            <IconBase {...props}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></IconBase>
         );
         const Search = (props) => (
-            <IconBase {...props}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></IconBase>
+            <IconBase {...props}><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></IconBase>
         );
         const Brain = (props) => (
-            <IconBase {...props}><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></IconBase>
+            <IconBase {...props}><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z" /><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z" /></IconBase>
         );
         const X = (props) => (
-            <IconBase {...props}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></IconBase>
+            <IconBase {...props}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></IconBase>
         );
         const ChevronDown = (props) => (
-            <IconBase {...props}><path d="m6 9 6 6 6-6"/></IconBase>
+            <IconBase {...props}><path d="m6 9 6 6 6-6" /></IconBase>
         );
 
         // --- Constants & Helpers ---
 
-        const ROW_HEIGHT = 80; 
-        const BUFFER_ITEMS = 5; 
+        const ROW_HEIGHT = 80;
+        const BUFFER_ITEMS = 5;
 
         const RARITY_MAP = {
             0: { label: "unset", color: "text-gray-400 border-gray-600 bg-gray-800" },
@@ -116,7 +156,7 @@
             let magA = 0, magB = 0;
             for (let i = 0; i < a.length; i++) magA += a[i] * a[i];
             for (let i = 0; i < b.length; i++) magB += b[i] * b[i];
-            
+
             return dot / (Math.sqrt(magA) * Math.sqrt(magB));
         }
 
@@ -157,7 +197,7 @@
                 const db = await openDB();
                 const tx = db.transaction([STORE_IMAGES], 'readwrite');
                 const imagesStore = tx.objectStore(STORE_IMAGES);
-                
+
                 // Only save new images (merge, don't clear)
                 let newCount = 0;
                 for (const [filename, fileObj] of imageFileMap.entries()) {
@@ -194,10 +234,10 @@
 
                 const db = await openDB();
                 const tx = db.transaction([STORE_ITEMS, STORE_METADATA], 'readwrite');
-                
+
                 // Save items (merge, don't clear)
                 const itemsStore = tx.objectStore(STORE_ITEMS);
-                
+
                 let putCount = 0;
                 items.forEach(item => {
                     try {
@@ -236,7 +276,7 @@
                 const db = await openDB();
                 const tx = db.transaction([STORE_EMBEDDINGS], 'readwrite');
                 const embeddingsStore = tx.objectStore(STORE_EMBEDDINGS);
-                
+
                 let savedCount = 0;
                 for (const [itemId, vector] of embeddingsMap.entries()) {
                     try {
@@ -269,7 +309,7 @@
                 const db = await openDB();
                 const tx = db.transaction([STORE_EMBEDDINGS], 'readonly');
                 const embeddingsStore = tx.objectStore(STORE_EMBEDDINGS);
-                
+
                 const embeddingsRecords = await new Promise((resolve, reject) => {
                     const req = embeddingsStore.getAll();
                     req.onsuccess = () => resolve(req.result);
@@ -293,7 +333,7 @@
             try {
                 const db = await openDB();
                 const tx = db.transaction([STORE_ITEMS, STORE_IMAGES, STORE_METADATA, STORE_EMBEDDINGS], 'readonly');
-                
+
                 // Load items
                 const itemsStore = tx.objectStore(STORE_ITEMS);
                 const items = await new Promise((resolve, reject) => {
@@ -324,9 +364,9 @@
                     req.onerror = () => reject(req.error);
                 });
 
-                const metadata = metadataRecord ? { 
-                    timestamp: metadataRecord.timestamp, 
-                    Date: metadataRecord.Date 
+                const metadata = metadataRecord ? {
+                    timestamp: metadataRecord.timestamp,
+                    Date: metadataRecord.Date
                 } : null;
 
                 // Load embeddings
@@ -395,7 +435,7 @@
 
         const Modal = ({ isOpen, onClose, title, message, onConfirm, confirmText = "Confirm", cancelText = "Cancel" }) => {
             if (!isOpen) return null;
-            
+
             return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
                     <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -420,7 +460,48 @@
             );
         };
 
-        const FileMenu = ({ onSaveToDesktop, onExportFor, onClear }) => {
+        const ExportFormatModal = ({ isOpen, onClose, onSelectFormat }) => {
+            if (!isOpen) return null;
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+                    <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-lg font-semibold text-slate-200 mb-2">Export</h3>
+                        <p className="text-sm text-slate-400 mb-6">select a format to export to</p>
+                        <div className="space-y-2 mb-6">
+                            <button
+                                onClick={() => onSelectFormat('csv')}
+                                className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-slate-800 rounded-lg transition-colors border border-slate-700 hover:border-slate-600"
+                            >
+                                CSV
+                            </button>
+                            <button
+                                onClick={() => onSelectFormat('excel')}
+                                className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-slate-800 rounded-lg transition-colors border border-slate-700 hover:border-slate-600"
+                            >
+                                Excel
+                            </button>
+                            <button
+                                onClick={() => onSelectFormat('pdf')}
+                                className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-slate-800 rounded-lg transition-colors border border-slate-700 hover:border-slate-600"
+                            >
+                                PDF
+                            </button>
+                        </div>
+                        <div className="flex justify-end">
+                            <button
+                                onClick={onClose}
+                                className="px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const FileMenu = ({ onSaveToDesktop, onExportFor, onClear, onUpdateInventory }) => {
             const [isOpen, setIsOpen] = useState(false);
             const menuRef = useRef(null);
 
@@ -449,9 +530,18 @@
                         <span>File</span>
                         <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                     </button>
-                    
+
                     {isOpen && (
                         <div className="absolute right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                            <button
+                                onClick={() => {
+                                    onUpdateInventory();
+                                    setIsOpen(false);
+                                }}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors border-t border-slate-700"
+                            >
+                                Upload New Extraction
+                            </button>
                             <button
                                 onClick={() => {
                                     onSaveToDesktop();
@@ -468,8 +558,9 @@
                                 }}
                                 className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
                             >
-                                Export for...
+                                Export...
                             </button>
+
                             <button
                                 onClick={() => {
                                     onClear();
@@ -477,7 +568,7 @@
                                 }}
                                 className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors border-t border-slate-700"
                             >
-                                Clear
+                                Delete Inventory
                             </button>
                         </div>
                     )}
@@ -504,14 +595,14 @@
                         "Do you want to continue?"
                     );
                     if (!confirmed) {
-                        e.target.value = ''; 
+                        e.target.value = '';
                         return;
                     }
                 }
 
                 setLoading(true);
                 setError(null);
-                
+
                 try {
                     const files = Array.from(e.target.files);
                     if (files.length === 0) throw new Error("No folder selected or folder is empty.");
@@ -533,7 +624,7 @@
 
                     const text = await readFileAsText(dataFile);
                     const { data: enrichedData, metadata } = parseAndEnrichData(text);
-                    
+
                     // Pass both maps
                     onDataLoaded(enrichedData, urlMap, metadata, fileMap);
 
@@ -558,7 +649,7 @@
                 let text = rawText.trim();
                 // Handle trailing commas if present
                 if (text.endsWith(',') || text.endsWith(',]')) text = text.replace(/,(\s*\]?)$/, '$1');
-                
+
                 // FIXED: Don't blindly wrap in brackets. Try parsing first.
                 let json;
                 try {
@@ -571,7 +662,7 @@
                         throw new Error("Failed to parse JSON. Ensure the file contains a valid JSON array.");
                     }
                 }
-                
+
                 // Handle new format with metadata (object with data property)
                 let dataArray;
                 let metadata = null;
@@ -589,7 +680,7 @@
 
                 // Check direct object
                 let extracted = extractFromObject(json);
-                
+
                 // Check if it got wrapped in an array accidentally or intentionally (length 1 array containing the root object)
                 if (!extracted && Array.isArray(json) && json.length === 1) {
                     extracted = extractFromObject(json[0]);
@@ -610,7 +701,7 @@
                     ...item,
                     name: item.name || "Unknown Item",
                     image: item.image || "",
-                    quantity: item.count !== undefined ? item.count : (item.quantity || 0), 
+                    quantity: item.count !== undefined ? item.count : (item.quantity || 0),
                     price: item.price !== undefined ? item.price : 0,
                     rarity: item.rarity !== undefined ? item.rarity : 0
                 }));
@@ -624,11 +715,11 @@
                         <div className="bg-blue-500/10 p-4 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center">
                             <FolderOpen className="w-12 h-12 text-blue-500" />
                         </div>
-                        
+
                         <h1 className="text-3xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
                             Import Inventory
                         </h1>
-                        
+
                         <p className="text-slate-400 mb-8 leading-relaxed">
                             Select the folder containing your data file and images.
                         </p>
@@ -642,9 +733,9 @@
                             ) : (
                                 <span>Select Folder</span>
                             )}
-                            <input 
+                            <input
                                 ref={inputRef}
-                                type="file" 
+                                type="file"
                                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                 onChange={handleFolderSelect}
                                 disabled={loading}
@@ -667,8 +758,8 @@
             const rarityStyle = RARITY_MAP[item.rarity] || RARITY_MAP[0];
 
             return (
-                <div 
-                    style={style} 
+                <div
+                    style={style}
                     className="absolute w-full flex items-center border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors px-4 group"
                 >
                     <div className="w-12 text-slate-600 text-sm font-mono flex-shrink-0">{index + 1}</div>
@@ -676,10 +767,10 @@
                     <div className="w-20 h-20 p-2 flex-shrink-0">
                         <div className="w-full h-full rounded-lg bg-slate-800/50 border border-slate-700/50 overflow-hidden relative">
                             {imageUrl ? (
-                                <img 
-                                    src={imageUrl} 
-                                    alt={item.name} 
-                                    className="w-full h-full object-contain hover:scale-110 transition-transform duration-300" 
+                                <img
+                                    src={imageUrl}
+                                    alt={item.name}
+                                    className="w-full h-full object-contain hover:scale-110 transition-transform duration-300"
                                     loading="lazy"
                                 />
                             ) : (
@@ -694,15 +785,15 @@
                         <div className="font-medium text-slate-200 truncate group-hover:text-blue-300 transition-colors" title={item.name}>
                             {item.name}
                         </div>
-                        <div className="text-xs text-slate-500 font-mono truncate mt-0.5" title={item.id}>
-                            {item.id}
+                        <div className="text-xs text-slate-500 font-mono truncate mt-0.5" title={item.type || item.id}>
+                            {item.type || item.id}
                         </div>
                     </div>
 
                     <div className="w-28 px-2">
                         <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Qty</label>
-                        <input 
-                            type="number" 
+                        <input
+                            type="number"
                             className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 focus:outline-none text-right text-slate-200 transition-all"
                             value={item.quantity}
                             min="0"
@@ -714,8 +805,8 @@
                         <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Price</label>
                         <div className="relative">
                             <span className="absolute left-2 top-1.5 text-slate-500 text-sm">$</span>
-                            <input 
-                                type="number" 
+                            <input
+                                type="number"
                                 className="w-full bg-slate-900 border border-slate-700 rounded pl-5 pr-2 py-1.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 focus:outline-none text-right text-slate-200 transition-all"
                                 value={item.price}
                                 placeholder="0"
@@ -727,7 +818,7 @@
 
                     <div className="w-36 px-2">
                         <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Rarity</label>
-                        <select 
+                        <select
                             className={`w-full border rounded px-2 py-1.5 text-xs font-medium focus:outline-none appearance-none cursor-pointer transition-all ${rarityStyle.color} ${rarityStyle.bg || 'bg-slate-900'}`}
                             value={item.rarity}
                             onChange={(e) => onUpdate(item.actualIndex, 'rarity', parseInt(e.target.value))}
@@ -775,8 +866,8 @@
                 for (let i = startIndex; i <= endIndex; i++) {
                     const item = items[i];
                     rows.push(
-                        <ItemRow 
-                            key={item.id || i} 
+                        <ItemRow
+                            key={item.id || i}
                             index={i}
                             item={item}
                             style={{ top: i * ROW_HEIGHT, height: ROW_HEIGHT }}
@@ -789,7 +880,7 @@
             }, [startIndex, endIndex, items, imageMap, onUpdateItem]);
 
             return (
-                <div 
+                <div
                     ref={containerRef}
                     className="flex-1 overflow-y-auto relative bg-slate-950 scroll-smooth virtual-scroller"
                     onScroll={handleScroll}
@@ -813,21 +904,28 @@
             const [extractionDate, setExtractionDate] = useState(null);
             const [isLoadingFromDB, setIsLoadingFromDB] = useState(true);
             const [hasStoredData, setHasStoredData] = useState(false);
-            
+
             // AI State
             const [pipeline, setPipeline] = useState(null);
             const [embeddings, setEmbeddings] = useState(null);
-            const [indexingProgress, setIndexingProgress] = useState(0); 
+            const [indexingProgress, setIndexingProgress] = useState(0);
             const [isAIReady, setIsAIReady] = useState(false);
-            
+
             // Search State
             const [searchQuery, setSearchQuery] = useState("");
             const [searchResults, setSearchResults] = useState(null);
             const [isSearching, setIsSearching] = useState(false);
-            
+
             // Modal State
             const [showFirstClearModal, setShowFirstClearModal] = useState(false);
             const [showSecondClearModal, setShowSecondClearModal] = useState(false);
+            const [showExportFormatModal, setShowExportFormatModal] = useState(false);
+            const [showUpdateConfirmModal, setShowUpdateConfirmModal] = useState(false);
+            const [pendingUpdateData, setPendingUpdateData] = useState(null);
+            const [showSaveToDesktopModal, setShowSaveToDesktopModal] = useState(false);
+
+            // File input ref for update inventory
+            const updateInventoryInputRef = useRef(null);
 
             // 0. Load from IndexedDB on mount
             useEffect(() => {
@@ -835,14 +933,14 @@
                     try {
                         const { items, imageMap: loadedImageMap, metadata, embeddingsMap } = await loadFromIndexedDB();
                         if (items && items.length > 0) {
-                            const indexedData = items.map((d, i) => ({...d, actualIndex: i}));
+                            const indexedData = items.map((d, i) => ({ ...d, actualIndex: i }));
                             setData(indexedData);
                             setImageMap(loadedImageMap);
                             setHasStoredData(true);
                             if (metadata) {
                                 setExtractionDate(metadata.Date);
                             }
-                            
+
                             // Convert embeddings Map to array format (matching item order)
                             if (embeddingsMap && embeddingsMap.size > 0) {
                                 const embeddingsArray = indexedData.map(item => embeddingsMap.get(item.id) || null);
@@ -867,11 +965,11 @@
             // 1. Initialize Transformers Pipeline
             useEffect(() => {
                 const initAI = async () => {
-                    if (!window.pipeline) return; 
+                    if (!window.pipeline) return;
 
                     try {
                         const pipe = await window.pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', {
-                            quantized: true 
+                            quantized: true
                         });
                         setPipeline(() => pipe);
                         setIsAIReady(true);
@@ -897,17 +995,17 @@
                 const generateEmbeddings = async () => {
                     // Load existing embeddings from DB
                     const existingEmbeddingsMap = await loadEmbeddingsFromIndexedDB();
-                    
+
                     // Determine which items need embeddings
                     const itemsNeedingEmbeddings = [];
                     const itemsNeedingRegeneration = [];
                     const vectors = [];
-                    
+
                     // Check each item
                     for (let i = 0; i < data.length; i++) {
                         const item = data[i];
                         const existingEmbedding = existingEmbeddingsMap.get(item.id);
-                        
+
                         if (!existingEmbedding) {
                             // Missing embedding - need to generate
                             itemsNeedingEmbeddings.push({ index: i, item });
@@ -922,7 +1020,7 @@
                             vectors.push(existingEmbedding);
                         }
                     }
-                    
+
                     // Also check for name changes by loading existing items from DB
                     // For items with embeddings, verify the name hasn't changed
                     const db = await openDB();
@@ -933,37 +1031,37 @@
                         req.onsuccess = () => resolve(req.result);
                         req.onerror = () => reject(req.error);
                     });
-                    
+
                     const existingItemsMap = new Map(existingItems.map(item => [item.id, item]));
-                    
+
                     // Re-check for name changes
                     for (let i = 0; i < data.length; i++) {
                         const item = data[i];
                         const existingItem = existingItemsMap.get(item.id);
                         const existingEmbedding = existingEmbeddingsMap.get(item.id);
-                        
+
                         if (existingItem && existingEmbedding && existingItem.name !== item.name) {
                             // Name changed - need to regenerate
                             itemsNeedingRegeneration.push({ index: i, item });
                             vectors[i] = null; // mark for regeneration
                         }
                     }
-                    
+
                     const totalNeedingGeneration = itemsNeedingEmbeddings.length + itemsNeedingRegeneration.length;
-                    
+
                     if (totalNeedingGeneration === 0) {
                         // All embeddings exist and are up to date
                         setEmbeddings(vectors);
                         setIndexingProgress(100);
                         return;
                     }
-                    
+
                     setIndexingProgress(0);
-                    
+
                     // Generate embeddings for items that need them
                     const itemsToProcess = [...itemsNeedingEmbeddings, ...itemsNeedingRegeneration];
                     const embeddingsToSave = new Map();
-                    
+
                     const CHUNK_SIZE = 10;
                     for (let i = 0; i < itemsToProcess.length; i += CHUNK_SIZE) {
                         const chunk = itemsToProcess.slice(i, i + CHUNK_SIZE);
@@ -971,29 +1069,29 @@
                             const output = await pipeline(`Furniture item: ${item.name}`, { pooling: 'mean', normalize: true });
                             return { index, itemId: item.id, vector: Array.from(output.data) };
                         });
-                        
+
                         const results = await Promise.all(promises);
                         for (const { index, itemId, vector } of results) {
                             vectors[index] = vector;
                             embeddingsToSave.set(itemId, vector);
                         }
-                        
+
                         setIndexingProgress(Math.round(((i + CHUNK_SIZE) / itemsToProcess.length) * 100));
-                        
+
                         // Save incrementally
                         if (embeddingsToSave.size >= CHUNK_SIZE) {
                             await saveEmbeddingsToIndexedDB(embeddingsToSave);
                             embeddingsToSave.clear();
                         }
-                        
+
                         await new Promise(r => setTimeout(r, 0));
                     }
-                    
+
                     // Save any remaining embeddings
                     if (embeddingsToSave.size > 0) {
                         await saveEmbeddingsToIndexedDB(embeddingsToSave);
                     }
-                    
+
                     setEmbeddings(vectors);
                     setIndexingProgress(100);
                 };
@@ -1010,8 +1108,8 @@
 
                 if (!embeddings || !pipeline) {
                     const lowerQuery = searchQuery.toLowerCase();
-                    const filtered = data.filter(item => 
-                        item.name.toLowerCase().includes(lowerQuery) || 
+                    const filtered = data.filter(item =>
+                        item.name.toLowerCase().includes(lowerQuery) ||
                         item.id.toLowerCase().includes(lowerQuery)
                     );
                     setSearchResults(filtered);
@@ -1020,20 +1118,20 @@
 
                 const runSearch = async () => {
                     setIsSearching(true);
-                    
+
                     const queryOutput = await pipeline(`Furniture item: ${searchQuery}`, { pooling: 'mean', normalize: true });
                     const queryVector = queryOutput.data;
 
                     const lowerQuery = searchQuery.toLowerCase();
-                    
+
                     const scoredItems = data.map((item, index) => {
                         let score = cosineSimilarity(queryVector, embeddings[index]);
-                        
+
                         if (item.name.toLowerCase().includes(lowerQuery)) {
-                            score += 1.0; 
+                            score += 1.0;
                         }
-                        
-                        return { ...item, score, actualIndex: index }; 
+
+                        return { ...item, score, actualIndex: index };
                     });
 
                     scoredItems.sort((a, b) => b.score - a.score);
@@ -1054,20 +1152,20 @@
                 try {
                     // Load existing data from IndexedDB for smart merging
                     const { items: existingItems, imageMap: existingImageMap, embeddingsMap: existingEmbeddingsMap } = await loadFromIndexedDB();
-                    
+
                     // Create maps for efficient lookup
                     const existingItemsMap = new Map(existingItems.map(item => [item.id, item]));
                     const existingImageFilenames = new Set(existingImageMap.keys());
-                    
+
                     // Build merged data: existing items + new items
                     const mergedItems = [];
                     const newImageFileMap = new Map();
                     const itemsNeedingEmbeddings = [];
-                    
+
                     // Process new items
                     for (const newItem of loadedData) {
                         const existingItem = existingItemsMap.get(newItem.id);
-                        
+
                         if (existingItem) {
                             // Item exists - check if name changed (need to regenerate embedding)
                             if (existingItem.name !== newItem.name) {
@@ -1079,7 +1177,7 @@
                             // New item - add it
                             mergedItems.push(newItem);
                             itemsNeedingEmbeddings.push(newItem);
-                            
+
                             // Check if this item's image is new (match by item.image property = filename)
                             if (newItem.image && !existingImageFilenames.has(newItem.image)) {
                                 // Find the image file that matches this item's image property
@@ -1090,14 +1188,14 @@
                             }
                         }
                     }
-                    
+
                     // Also keep existing items that weren't in the new upload
                     for (const existingItem of existingItems) {
                         if (!loadedData.find(item => item.id === existingItem.id)) {
                             mergedItems.push(existingItem);
                         }
                     }
-                    
+
                     // Add new images that don't match existing items (by item.image property)
                     for (const [filename, file] of loadedFileMap.entries()) {
                         if (!existingImageFilenames.has(filename)) {
@@ -1108,10 +1206,10 @@
                             }
                         }
                     }
-                    
+
                     // Index the merged data
-                    const indexedData = mergedItems.map((d, i) => ({...d, actualIndex: i}));
-                    
+                    const indexedData = mergedItems.map((d, i) => ({ ...d, actualIndex: i }));
+
                     // Build merged image map
                     const mergedImageMap = new Map(existingImageMap);
                     for (const [filename, url] of loadedUrlMap.entries()) {
@@ -1125,7 +1223,7 @@
                             mergedImageMap.set(filename, URL.createObjectURL(file));
                         }
                     }
-                    
+
                     // Revoke old blob URLs if needed
                     if (imageMap) {
                         imageMap.forEach(url => {
@@ -1134,14 +1232,14 @@
                             }
                         });
                     }
-                    
+
                     setData(indexedData);
                     setImageMap(mergedImageMap);
                     setHasStoredData(true);
-                    
+
                     // Clear embeddings to trigger regeneration for new/changed items
                     setEmbeddings(null);
-                    
+
                     if (metadata && metadata.Date) {
                         setExtractionDate(metadata.Date);
                     } else {
@@ -1155,7 +1253,7 @@
 
                     // STEP 2: Save merged data
                     await saveDataToIndexedDB(indexedData, metadata);
-                    
+
                     console.log(`Merged ${mergedItems.length} items (${itemsNeedingEmbeddings.length} new/changed). Saved ${newImageFileMap.size} new images.`);
 
                 } catch (e) {
@@ -1169,14 +1267,14 @@
                     const newData = [...prevData];
                     const oldItem = newData[actualIndex];
                     newData[actualIndex] = { ...newData[actualIndex], [field]: value };
-                    
+
                     // If name changed, regenerate embedding
                     if (field === 'name' && oldItem.name !== value && pipeline) {
                         (async () => {
                             try {
                                 const output = await pipeline(`Furniture item: ${value}`, { pooling: 'mean', normalize: true });
                                 const newVector = Array.from(output.data);
-                                
+
                                 // Update embeddings array
                                 setEmbeddings(prevEmbeddings => {
                                     if (!prevEmbeddings) return prevEmbeddings;
@@ -1184,7 +1282,7 @@
                                     updated[actualIndex] = newVector;
                                     return updated;
                                 });
-                                
+
                                 // Save to IndexedDB
                                 const embeddingsToSave = new Map();
                                 embeddingsToSave.set(newData[actualIndex].id, newVector);
@@ -1194,25 +1292,25 @@
                             }
                         })();
                     }
-                    
+
                     // Efficient Save: Only update the Items/JSON store.
                     // DO NOT re-save images here.
                     clearTimeout(window._saveTimeout);
                     window._saveTimeout = setTimeout(async () => {
                         try {
-                             await saveDataToIndexedDB(newData, extractionDate ? { timestamp: Date.now(), Date: extractionDate } : null);
+                            await saveDataToIndexedDB(newData, extractionDate ? { timestamp: Date.now(), Date: extractionDate } : null);
                         } catch (e) {
                             console.error('Error auto-saving changes:', e);
                         }
-                    }, 1000); 
-                    
+                    }, 1000);
+
                     return newData;
                 });
             }, [extractionDate, pipeline]);
 
             const handleExport = async () => {
                 if (!data) return;
-                
+
                 try {
                     // Get current date in the same format as extraction date (matching extractor format)
                     const now = new Date();
@@ -1227,29 +1325,29 @@
                         timeZoneName: 'short'
                     });
                     const currentTimestamp = now.getTime();
-                    
+
                     // Prepare export data in the format expected by import
-                    const exportData = data.map(({actualIndex, score, ...item}) => item);
+                    const exportData = data.map(({ actualIndex, score, ...item }) => item);
                     const exportObject = {
                         data: exportData,
                         timestamp: currentTimestamp,
                         Date: currentDate
                     };
-                    
+
                     // Get images from IndexedDB
                     const imageBlobs = await getImagesFromIndexedDB();
-                    
+
                     // Create ZIP file
                     const zip = new JSZip();
-                    
+
                     // Add data file (named exactly as import expects)
                     zip.file("furniture_data.txt", JSON.stringify(exportObject, null, 2));
-                    
+
                     // Add all images
                     for (const [filename, blob] of imageBlobs.entries()) {
                         zip.file(filename, blob);
                     }
-                    
+
                     // Generate ZIP and download
                     const zipBlob = await zip.generateAsync({ type: "blob" });
                     const url = URL.createObjectURL(zipBlob);
@@ -1262,12 +1360,237 @@
                     a.click();
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
-                    
+
                     console.log(`Exported ${exportData.length} items and ${imageBlobs.size} images to ZIP file.`);
                 } catch (e) {
                     console.error('Error exporting data:', e);
                     alert(`Error exporting data: ${e.message}`);
                 }
+            };
+
+            const handleUpdateInventory = () => {
+                // Show confirmation modal first
+                setShowUpdateConfirmModal(true);
+            };
+
+            const handleUpdateInventoryConfirm = () => {
+                // Close modal and trigger file input
+                setShowUpdateConfirmModal(false);
+                if (updateInventoryInputRef.current) {
+                    updateInventoryInputRef.current.click();
+                }
+            };
+
+            const handleUpdateInventoryFileSelect = async (e) => {
+                const files = Array.from(e.target.files);
+                if (files.length === 0) {
+                    e.target.value = '';
+                    return;
+                }
+
+                try {
+                    const dataFile = files.find(f => f.name.toLowerCase() === "furniture_data.txt" || f.name.toLowerCase().endsWith(".json"));
+                    if (!dataFile) {
+                        alert("Could not find 'furniture_data.txt'.");
+                        e.target.value = '';
+                        return;
+                    }
+
+                    const urlMap = new Map();
+                    const fileMap = new Map();
+
+                    files.forEach(file => {
+                        if (file.type.startsWith('image/')) {
+                            urlMap.set(file.name, URL.createObjectURL(file));
+                            fileMap.set(file.name, file);
+                        }
+                    });
+
+                    const text = await readFileAsText(dataFile);
+                    const { data: enrichedData, metadata } = parseAndEnrichData(text);
+
+                    // Process update directly (confirmation was already shown)
+                    await handleUpdateInventoryData(enrichedData, urlMap, metadata, fileMap);
+                    e.target.value = ''; // Reset input
+                } catch (err) {
+                    console.error(err);
+                    alert(`Error reading file: ${err.message}`);
+                    e.target.value = '';
+                }
+            };
+
+            const handleUpdateInventoryData = async (loadedData, loadedUrlMap, metadata, loadedFileMap) => {
+                try {
+                    // Load existing data from IndexedDB
+                    const { items: existingItems, imageMap: existingImageMap, embeddingsMap: existingEmbeddingsMap } = await loadFromIndexedDB();
+
+                    // Create maps for efficient lookup
+                    const existingItemsMap = new Map(existingItems.map(item => [item.id, item]));
+                    const existingImageFilenames = new Set(existingImageMap.keys());
+
+                    // Build updated data
+                    const updatedItems = [];
+                    const newImageFileMap = new Map();
+                    const itemsNeedingEmbeddings = [];
+
+                    // Process loaded items
+                    for (const newItem of loadedData) {
+                        const existingItem = existingItemsMap.get(newItem.id);
+
+                        if (existingItem) {
+                            // Item exists - update quantity only, preserve price, rarity, and image
+                            updatedItems.push({
+                                ...existingItem,
+                                quantity: newItem.quantity || existingItem.quantity || 0
+                                // Price and rarity are preserved from existingItem
+                                // Image is preserved from existingItem
+                            });
+                            // Don't add to itemsNeedingEmbeddings since we're not changing name
+                        } else {
+                            // New item - add it completely with image
+                            updatedItems.push(newItem);
+                            itemsNeedingEmbeddings.push(newItem);
+
+                            // Add image for new item
+                            if (newItem.image && !existingImageFilenames.has(newItem.image)) {
+                                const imageFile = loadedFileMap.get(newItem.image);
+                                if (imageFile) {
+                                    newImageFileMap.set(newItem.image, imageFile);
+                                }
+                            }
+                        }
+                    }
+
+                    // Keep existing items that weren't in the update
+                    for (const existingItem of existingItems) {
+                        if (!loadedData.find(item => item.id === existingItem.id)) {
+                            updatedItems.push(existingItem);
+                        }
+                    }
+
+                    // Add new images that don't match existing items
+                    for (const [filename, file] of loadedFileMap.entries()) {
+                        if (!existingImageFilenames.has(filename)) {
+                            const itemUsingImage = loadedData.find(item => item.image === filename);
+                            if (itemUsingImage && !existingItemsMap.has(itemUsingImage.id)) {
+                                newImageFileMap.set(filename, file);
+                            }
+                        }
+                    }
+
+                    // Index the updated data
+                    const indexedData = updatedItems.map((d, i) => ({ ...d, actualIndex: i }));
+
+                    // Build merged image map
+                    const mergedImageMap = new Map(existingImageMap);
+                    for (const [filename, url] of loadedUrlMap.entries()) {
+                        if (!mergedImageMap.has(filename)) {
+                            mergedImageMap.set(filename, url);
+                        }
+                    }
+                    for (const [filename, file] of newImageFileMap.entries()) {
+                        if (!mergedImageMap.has(filename)) {
+                            mergedImageMap.set(filename, URL.createObjectURL(file));
+                        }
+                    }
+
+                    // Revoke old blob URLs if needed
+                    if (imageMap) {
+                        imageMap.forEach(url => {
+                            if (url.startsWith('blob:') && !Array.from(mergedImageMap.values()).includes(url)) {
+                                URL.revokeObjectURL(url);
+                            }
+                        });
+                    }
+
+                    setData(indexedData);
+                    setImageMap(mergedImageMap);
+                    setHasStoredData(true);
+
+                    // Clear embeddings to trigger regeneration for new items only
+                    setEmbeddings(null);
+
+                    // Don't update extraction date for updates
+
+                    // STEP 1: Save only new images (for new items)
+                    if (newImageFileMap.size > 0) {
+                        await saveImagesToIndexedDB(newImageFileMap, existingImageMap);
+                    }
+
+                    // STEP 2: Save updated data
+                    await saveDataToIndexedDB(indexedData, extractionDate ? { timestamp: Date.now(), Date: extractionDate } : null);
+
+                    console.log(`Updated inventory: ${updatedItems.length} items (${itemsNeedingEmbeddings.length} new). Saved ${newImageFileMap.size} new images.`);
+
+                } catch (e) {
+                    console.error('Error updating inventory:', e);
+                    alert(`Error updating inventory: ${e.message}`);
+                }
+            };
+
+            const readFileAsText = (file) => {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (event) => resolve(event.target.result);
+                    reader.onerror = (error) => reject(error);
+                    reader.readAsText(file);
+                });
+            };
+
+            const parseAndEnrichData = (rawText) => {
+                let text = rawText.trim();
+                if (text.endsWith(',') || text.endsWith(',]')) text = text.replace(/,(\s*\]?)$/, '$1');
+
+                let json;
+                try {
+                    json = JSON.parse(text);
+                } catch (e) {
+                    try {
+                        json = JSON.parse(`[${text}]`);
+                    } catch (e2) {
+                        throw new Error("Failed to parse JSON. Ensure the file contains a valid JSON array.");
+                    }
+                }
+
+                let dataArray;
+                let metadata = null;
+
+                const extractFromObject = (obj) => {
+                    if (obj && typeof obj === 'object' && obj.data && Array.isArray(obj.data)) {
+                        return {
+                            data: obj.data,
+                            meta: { timestamp: obj.timestamp, Date: obj.Date }
+                        };
+                    }
+                    return null;
+                };
+
+                let extracted = extractFromObject(json);
+
+                if (!extracted && Array.isArray(json) && json.length === 1) {
+                    extracted = extractFromObject(json[0]);
+                }
+
+                if (extracted) {
+                    dataArray = extracted.data;
+                    metadata = extracted.meta;
+                } else if (Array.isArray(json)) {
+                    dataArray = json;
+                } else {
+                    throw new Error("File content is not a valid JSON array or object with data property.");
+                }
+
+                const enrichedData = dataArray.map((item, idx) => ({
+                    id: item.id || `temp-${idx}`,
+                    ...item,
+                    name: item.name || "Unknown Item",
+                    image: item.image || "",
+                    quantity: item.count !== undefined ? item.count : (item.quantity || 0),
+                    price: item.price !== undefined ? item.price : 0,
+                    rarity: item.rarity !== undefined ? item.rarity : 0
+                }));
+
+                return { data: enrichedData, metadata };
             };
 
             const handleClear = () => {
@@ -1292,11 +1615,74 @@
                 await clearIndexedDB();
             };
 
-            const handleSaveToDesktop = async () => {
+            const handleSaveToDesktop = () => {
                 if (!data) return;
-                
+                setShowSaveToDesktopModal(true);
+            };
+
+            const handleSaveToDesktopConfirm = async () => {
+                setShowSaveToDesktopModal(false);
+                if (!data) return;
+
                 try {
-                    // Get current date in the same format as extraction date (matching extractor format)
+                    // Wait for sql.js to be available
+                    let initSqlJs = window.initSqlJs;
+                    if (!initSqlJs) {
+                        // Wait a bit for the script to load
+                        await new Promise((resolve) => {
+                            let attempts = 0;
+                            const checkInterval = setInterval(() => {
+                                attempts++;
+                                if (window.initSqlJs) {
+                                    initSqlJs = window.initSqlJs;
+                                    clearInterval(checkInterval);
+                                    resolve();
+                                } else if (attempts > 50) {
+                                    clearInterval(checkInterval);
+                                    resolve();
+                                }
+                            }, 100);
+                        });
+                    }
+                    
+                    if (!initSqlJs) {
+                        throw new Error('SQL.js library not loaded. Please refresh the page and try again.');
+                    }
+                    
+                    const SQL = await initSqlJs({
+                        locateFile: file => `https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/${file}`
+                    });
+                    const db = new SQL.Database();
+
+                    // Create tables
+                    db.run(`
+                        CREATE TABLE IF NOT EXISTS metadata (
+                            key TEXT PRIMARY KEY,
+                            value TEXT
+                        );
+                    `);
+
+                    db.run(`
+                        CREATE TABLE IF NOT EXISTS items (
+                            id TEXT PRIMARY KEY,
+                            type TEXT,
+                            name TEXT,
+                            quantity INTEGER,
+                            price REAL,
+                            rarity INTEGER,
+                            image TEXT,
+                            data TEXT
+                        );
+                    `);
+
+                    db.run(`
+                        CREATE TABLE IF NOT EXISTS images (
+                            filename TEXT PRIMARY KEY,
+                            data BLOB
+                        );
+                    `);
+
+                    // Get current date
                     const now = new Date();
                     const currentDate = now.toLocaleString('en-US', {
                         weekday: 'long',
@@ -1309,51 +1695,360 @@
                         timeZoneName: 'short'
                     });
                     const currentTimestamp = now.getTime();
-                    
-                    // Prepare export data in the format expected by import
-                    const exportData = data.map(({actualIndex, score, ...item}) => item);
+
+                    // Save metadata
+                    db.run(`INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)`, ['timestamp', currentTimestamp.toString()]);
+                    db.run(`INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)`, ['date', currentDate]);
+
+                    // Prepare export data
+                    const exportData = data.map(({ actualIndex, score, ...item }) => item);
                     const exportObject = {
                         data: exportData,
                         timestamp: currentTimestamp,
                         Date: currentDate
                     };
-                    
-                    // Get images from IndexedDB
-                    const imageBlobs = await getImagesFromIndexedDB();
-                    
-                    // Create ZIP file
-                    const zip = new JSZip();
-                    
-                    // Add data file (named exactly as import expects)
-                    zip.file("furniture_data.txt", JSON.stringify(exportObject, null, 2));
-                    
-                    // Add all images
-                    for (const [filename, blob] of imageBlobs.entries()) {
-                        zip.file(filename, blob);
+
+                    // Save items
+                    const stmt = db.prepare(`INSERT OR REPLACE INTO items (id, type, name, quantity, price, rarity, image, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+                    for (const item of exportData) {
+                        stmt.run([
+                            item.id || '',
+                            item.type || item.id || '',
+                            item.name || '',
+                            item.quantity || 0,
+                            item.price || 0,
+                            item.rarity || 0,
+                            item.image || '',
+                            JSON.stringify(item)
+                        ]);
                     }
+                    stmt.free();
+
+                    // Get images from IndexedDB and save to database
+                    const imageBlobs = await getImagesFromIndexedDB();
+                    const imageStmt = db.prepare(`INSERT OR REPLACE INTO images (filename, data) VALUES (?, ?)`);
                     
-                    // Generate ZIP and download
-                    const zipBlob = await zip.generateAsync({ type: "blob" });
-                    const url = URL.createObjectURL(zipBlob);
+                    for (const [filename, blob] of imageBlobs.entries()) {
+                        const arrayBuffer = await blob.arrayBuffer();
+                        const uint8Array = new Uint8Array(arrayBuffer);
+                        imageStmt.run([filename, uint8Array]);
+                    }
+                    imageStmt.free();
+
+                    // Export database to file
+                    const dbData = db.export();
+                    const dbBlob = new Blob([dbData], { type: 'application/x-sqlite3' });
+                    const url = URL.createObjectURL(dbBlob);
                     const a = document.createElement("a");
                     a.href = url;
-                    // Format date as YYYY-MM-DD for filename
                     const dateStr = now.toISOString().split('T')[0];
-                    a.download = `my_vmk_furniture_${dateStr}.zip`;
+                    a.download = `my_vmk_furniture_${dateStr}.db`;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
-                    
-                    console.log(`Exported ${exportData.length} items and ${imageBlobs.size} images to ZIP file.`);
+
+                    db.close();
+                    console.log(`Saved ${exportData.length} items and ${imageBlobs.size} images to database file.`);
                 } catch (e) {
-                    console.error('Error exporting data:', e);
-                    alert(`Error exporting data: ${e.message}`);
+                    console.error('Error saving to desktop:', e);
+                    alert(`Error saving to desktop: ${e.message}`);
                 }
             };
 
             const handleExportFor = () => {
-                // Placeholder - will be implemented later
+                setShowExportFormatModal(true);
+            };
+
+            const handleExportFormat = async (format) => {
+                setShowExportFormatModal(false);
+                if (!data) return;
+
+                const now = new Date();
+                const dateStr = now.toISOString().split('T')[0];
+
+                try {
+                    // Get images from IndexedDB for exports
+                    const imageBlobs = await getImagesFromIndexedDB();
+
+                    switch (format) {
+                        case 'csv':
+                            await exportToCSV(data, dateStr, imageBlobs);
+                            break;
+                        case 'excel':
+                            await exportToExcel(data, dateStr, imageBlobs);
+                            break;
+                        case 'pdf':
+                            await exportToPDF(data, dateStr, imageBlobs);
+                            break;
+                    }
+                } catch (e) {
+                    console.error(`Error exporting to ${format}:`, e);
+                    alert(`Error exporting to ${format}: ${e.message}`);
+                }
+            };
+
+            const exportToCSV = (data, dateStr, imageBlobs) => {
+                // Prepare CSV headers (no Image column)
+                const headers = ['Type', 'Name', 'Quantity', 'Price', 'Rarity'];
+                const rows = data.map(item => [
+                    item.type || item.id || '',
+                    item.name || '',
+                    item.quantity || 0,
+                    item.price || 0,
+                    RARITY_MAP[item.rarity]?.label || 'unset'
+                ]);
+
+                // Combine headers and rows
+                const csvContent = [
+                    headers.join(','),
+                    ...rows.map(row => row.map(cell => {
+                        // Escape commas and quotes in cell values
+                        const cellStr = String(cell);
+                        if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+                            return `"${cellStr.replace(/"/g, '""')}"`;
+                        }
+                        return cellStr;
+                    }).join(','))
+                ].join('\n');
+
+                // Create blob and download plain CSV file
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `my_vmk_furniture_${dateStr}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            };
+
+            const exportToExcel = async (data, dateStr, imageBlobs) => {
+                // Use ExcelJS for image support
+                const ExcelJS = window.ExcelJS;
+                const workbook = new ExcelJS.Workbook();
+                const worksheet = workbook.addWorksheet('Inventory');
+
+                // Set column headers
+                worksheet.columns = [
+                    { header: 'Image', key: 'image', width: 15 },
+                    { header: 'Type', key: 'type', width: 20 },
+                    { header: 'Name', key: 'name', width: 30 },
+                    { header: 'Quantity', key: 'quantity', width: 10 },
+                    { header: 'Price', key: 'price', width: 12 },
+                    { header: 'Rarity', key: 'rarity', width: 15 }
+                ];
+
+                // Style header row
+                const headerRow = worksheet.getRow(1);
+                headerRow.font = { bold: true };
+                headerRow.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'FFE0E0E0' }
+                };
+                headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+                // Set column alignments
+                worksheet.getColumn(1).alignment = { vertical: 'middle', horizontal: 'center' }; // Image
+                worksheet.getColumn(2).alignment = { vertical: 'middle', horizontal: 'left' }; // Type
+                worksheet.getColumn(3).alignment = { vertical: 'middle', horizontal: 'left' }; // Name
+                worksheet.getColumn(4).alignment = { vertical: 'middle', horizontal: 'center' }; // Quantity
+                worksheet.getColumn(5).alignment = { vertical: 'middle', horizontal: 'right' }; // Price
+                worksheet.getColumn(6).alignment = { vertical: 'middle', horizontal: 'center' }; // Rarity
+
+                // Add data rows with images
+                for (let i = 0; i < data.length; i++) {
+                    const item = data[i];
+                    const row = worksheet.addRow({
+                        type: item.type || item.id || '',
+                        name: item.name || '',
+                        quantity: item.quantity || 0,
+                        price: item.price || 0,
+                        rarity: RARITY_MAP[item.rarity]?.label || 'unset'
+                    });
+
+                    // Set row height for images
+                    row.height = 60;
+
+                    // Set alignment for each cell
+                    row.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' }; // Image
+                    row.getCell(2).alignment = { vertical: 'middle', horizontal: 'left' }; // Type
+                    row.getCell(3).alignment = { vertical: 'middle', horizontal: 'left' }; // Name
+                    row.getCell(4).alignment = { vertical: 'middle', horizontal: 'center' }; // Quantity
+                    row.getCell(5).alignment = { vertical: 'middle', horizontal: 'right' }; // Price
+                    row.getCell(6).alignment = { vertical: 'middle', horizontal: 'center' }; // Rarity
+
+                    // Add image if available
+                    if (item.image && imageBlobs.has(item.image)) {
+                        try {
+                            const imageBlob = imageBlobs.get(item.image);
+
+                            // Convert blob to array buffer
+                            const arrayBuffer = await imageBlob.arrayBuffer();
+
+                            // Determine image extension
+                            let extension = 'jpeg';
+                            if (imageBlob.type === 'image/png') {
+                                extension = 'png';
+                            } else if (imageBlob.type === 'image/gif') {
+                                extension = 'gif';
+                            }
+
+                            // Add image to the first column (Image column)
+                            const imageId = workbook.addImage({
+                                buffer: arrayBuffer,
+                                extension: extension
+                            });
+
+                            // Position image in the cell (column A, current row)
+                            // Center the image in the cell
+                            const imageSize = 50;
+                            const cellWidth = worksheet.getColumn(1).width || 15;
+                            const cellHeight = row.height || 60;
+
+                            // Calculate offset to center image (in Excel units: 1 col = ~64px, 1 row = ~20px)
+                            const colOffset = ((cellWidth * 7) - imageSize) / 2 / 7; // Convert to column units
+                            const rowOffset = ((cellHeight - imageSize) / 2) / 20; // Convert to row units
+
+                            worksheet.addImage(imageId, {
+                                tl: { col: 0 + colOffset, row: i + 1 + rowOffset },
+                                ext: { width: imageSize, height: imageSize }
+                            });
+                        } catch (e) {
+                            console.warn('Error adding image to Excel:', e);
+                            // If image fails, just leave the cell empty
+                        }
+                    }
+                }
+
+                // Generate buffer and download
+                const buffer = await workbook.xlsx.writeBuffer();
+                const blob = new Blob([buffer], {
+                    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `my_vmk_furniture_${dateStr}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            };
+
+            const exportToPDF = async (data, dateStr, imageBlobs) => {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+
+                // Set up PDF
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
+                const margin = 15;
+                const startY = 20;
+                let currentY = startY;
+                const imageSize = 25; // Size for thumbnail images
+                const rowHeight = Math.max(8, imageSize + 4); // Adjust row height for images
+                const maxY = pageHeight - margin;
+
+                // Title
+                doc.setFontSize(16);
+                doc.text('VMK Furniture Inventory', margin, currentY);
+                currentY += 10;
+
+                // Date
+                doc.setFontSize(10);
+                doc.setTextColor(100, 100, 100);
+                doc.text(`Exported: ${dateStr}`, margin, currentY);
+                currentY += 8;
+
+                // Table headers
+                doc.setFontSize(10);
+                doc.setTextColor(0, 0, 0);
+                doc.setFont(undefined, 'bold');
+                const headers = ['Image', 'Type', 'Name', 'Qty', 'Price', 'Rarity'];
+                const colWidths = [30, 25, 60, 15, 20, 25];
+                let xPos = margin;
+
+                headers.forEach((header, idx) => {
+                    doc.text(header, xPos, currentY);
+                    xPos += colWidths[idx];
+                });
+
+                currentY += rowHeight;
+                doc.setDrawColor(200, 200, 200);
+                doc.line(margin, currentY, pageWidth - margin, currentY);
+                currentY += 3;
+
+                // Table rows with images
+                doc.setFont(undefined, 'normal');
+                doc.setFontSize(8);
+
+                for (let index = 0; index < data.length; index++) {
+                    const item = data[index];
+
+                    // Check if we need a new page
+                    if (currentY + rowHeight > maxY) {
+                        doc.addPage();
+                        currentY = startY;
+                    }
+
+                    xPos = margin;
+
+                    // Add image if available
+                    if (item.image && imageBlobs.has(item.image)) {
+                        try {
+                            const imageBlob = imageBlobs.get(item.image);
+                            const imageUrl = URL.createObjectURL(imageBlob);
+
+                            // Convert blob to base64 for PDF
+                            const reader = new FileReader();
+                            await new Promise((resolve, reject) => {
+                                reader.onload = () => {
+                                    try {
+                                        const base64 = reader.result;
+                                        // Add image to PDF
+                                        doc.addImage(base64, 'JPEG', xPos, currentY - imageSize + 2, imageSize - 4, imageSize - 4);
+                                        URL.revokeObjectURL(imageUrl);
+                                        resolve();
+                                    } catch (e) {
+                                        console.warn('Error adding image to PDF:', e);
+                                        URL.revokeObjectURL(imageUrl);
+                                        resolve(); // Continue without image
+                                    }
+                                };
+                                reader.onerror = () => {
+                                    URL.revokeObjectURL(imageUrl);
+                                    resolve(); // Continue without image
+                                };
+                                reader.readAsDataURL(imageBlob);
+                            });
+                        } catch (e) {
+                            console.warn('Error processing image for PDF:', e);
+                        }
+                    }
+
+                    xPos += colWidths[0]; // Move past image column
+
+                    const rowData = [
+                        ((item.type || item.id) || '').substring(0, 15),
+                        (item.name || '').substring(0, 25),
+                        String(item.quantity || 0),
+                        `$${item.price || 0}`,
+                        (RARITY_MAP[item.rarity]?.label || 'unset').substring(0, 12)
+                    ];
+
+                    rowData.forEach((cell, idx) => {
+                        doc.text(cell, xPos, currentY);
+                        xPos += colWidths[idx + 1]; // +1 because we skipped image column
+                    });
+
+                    currentY += rowHeight;
+                }
+
+                // Save PDF
+                doc.save(`my_vmk_furniture_${dateStr}.pdf`);
             };
 
             const displayItems = searchResults || data;
@@ -1362,9 +2057,9 @@
                 <div className="flex flex-col h-screen w-full bg-slate-950 text-slate-100 font-sans overflow-hidden">
                     <div className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between shadow-xl z-10 shrink-0 gap-4">
                         <div className="flex items-center space-x-3 shrink-0">
-                            <img 
-                                src="./logo.png" 
-                                alt="Logo" 
+                            <img
+                                src="./logo.png"
+                                alt="Logo"
                                 className="w-16 h-12 rounded-lg shadow-lg shadow-blue-900/20 object-contain bg-slate-800 border border-slate-700"
                                 onError={(e) => {
                                     e.target.style.display = 'none';
@@ -1382,11 +2077,7 @@
                                         <span className="bg-slate-800 text-slate-400 text-[10px] px-1.5 py-0.5 rounded border border-slate-700">
                                             {data.length.toLocaleString()} items
                                         </span>
-                                        {extractionDate && (
-                                            <span className="bg-slate-800 text-slate-400 text-[10px] px-1.5 py-0.5 rounded border border-slate-700" title="Data extraction date">
-                                                Extracted: {extractionDate}
-                                            </span>
-                                        )}
+
                                     </div>
                                 )}
                             </div>
@@ -1397,7 +2088,7 @@
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <Search className={`w-4 h-4 ${isSearching ? 'text-blue-400 animate-pulse' : 'text-slate-500'}`} />
                                 </div>
-                                <input 
+                                <input
                                     type="text"
                                     className="block w-full pl-10 pr-10 py-2 border border-slate-700 rounded-xl leading-5 bg-slate-800 text-slate-300 placeholder-slate-500 focus:outline-none focus:bg-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all sm:text-sm"
                                     placeholder={embeddings ? "Search (e.g. 'Office chair' finds 'Stool')" : "Searching by text..."}
@@ -1405,17 +2096,17 @@
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                 />
                                 {searchQuery && (
-                                    <button 
+                                    <button
                                         className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-white"
                                         onClick={() => setSearchQuery('')}
                                     >
                                         <X className="w-4 h-4" />
                                     </button>
                                 )}
-                                
+
                                 {indexingProgress < 100 && indexingProgress > 0 && (
                                     <div className="absolute -bottom-3 left-0 w-full h-1 bg-slate-800 rounded-full overflow-hidden">
-                                        <div 
+                                        <div
                                             className="h-full bg-blue-500 transition-all duration-300"
                                             style={{ width: `${indexingProgress}%` }}
                                         />
@@ -1433,10 +2124,11 @@
                                     )}
                                 </div>
 
-                                <FileMenu 
+                                <FileMenu
                                     onSaveToDesktop={handleSaveToDesktop}
                                     onExportFor={handleExportFor}
                                     onClear={handleClear}
+                                    onUpdateInventory={handleUpdateInventory}
                                 />
                             </div>
                         )}
@@ -1460,11 +2152,11 @@
                                     <div className="w-32 px-2">Price</div>
                                     <div className="w-36 px-2">Rarity</div>
                                 </div>
-                                
-                                <VirtualList 
-                                    items={displayItems} 
-                                    imageMap={imageMap} 
-                                    onUpdateItem={handleUpdateItem} 
+
+                                <VirtualList
+                                    items={displayItems}
+                                    imageMap={imageMap}
+                                    onUpdateItem={handleUpdateItem}
                                 />
                             </>
                         )}
@@ -1474,7 +2166,7 @@
                         isOpen={showFirstClearModal}
                         onClose={() => setShowFirstClearModal(false)}
                         title="Warning"
-                        message="this will clear your inventory make sure you save to Desktop if u wish to save a copy"
+                        message="This will clear your inventory manager. Make sure you have saved a copy to your Desktop."
                         onConfirm={handleFirstClearConfirm}
                         confirmText="Next"
                         cancelText="Cancel"
@@ -1484,10 +2176,49 @@
                         isOpen={showSecondClearModal}
                         onClose={() => setShowSecondClearModal(false)}
                         title="Confirm"
-                        message="are you sure u want to clear inventory?"
+                        message="are you sure u want to clear your inventory manager?"
                         onConfirm={handleSecondClearConfirm}
                         confirmText="Confirm"
                         cancelText="Cancel"
+                    />
+
+                    <ExportFormatModal
+                        isOpen={showExportFormatModal}
+                        onClose={() => setShowExportFormatModal(false)}
+                        onSelectFormat={handleExportFormat}
+                    />
+
+                    <Modal
+                        isOpen={showUpdateConfirmModal}
+                        onClose={() => {
+                            setShowUpdateConfirmModal(false);
+                            setPendingUpdateData(null);
+                        }}
+                        title="Upload new extraction"
+                        message="This will update quantities for existing items and/or add any new or missing items."
+                        onConfirm={handleUpdateInventoryConfirm}
+                        confirmText="Confirm"
+                        cancelText="Cancel"
+                    />
+
+                    <Modal
+                        isOpen={showSaveToDesktopModal}
+                        onClose={() => setShowSaveToDesktopModal(false)}
+                        title="Save to Desktop"
+                        message="this will save a local copy of your inventory on your desktop, which you can share or re-open to view"
+                        onConfirm={handleSaveToDesktopConfirm}
+                        confirmText="Save"
+                        cancelText="Cancel"
+                    />
+
+                    {/* Hidden file input for update inventory */}
+                    <input
+                        ref={updateInventoryInputRef}
+                        type="file"
+                        style={{ display: 'none' }}
+                        webkitdirectory=""
+                        directory=""
+                        onChange={handleUpdateInventoryFileSelect}
                     />
                 </div>
             );
@@ -1497,4 +2228,5 @@
         root.render(<App />);
     </script>
 </body>
+
 </html>
