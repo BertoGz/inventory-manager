@@ -5,17 +5,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Manager + AI</title>
-
+    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-
+    
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-
+    
     <!-- Babel for in-browser JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
+    
     <!-- JSZip for ZIP export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
@@ -34,10 +34,10 @@
     <!-- Transformers.js (AI Model) -->
     <script type="module">
         import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.16.0';
-
+        
         // Skip local model checks since we are in a browser without a file system
         env.allowLocalModels = false;
-
+        
         // Attach to window so our React app can use it
         window.pipeline = pipeline;
         window.transformersLoaded = true;
@@ -64,12 +64,12 @@
             background: #475569;
         }
 
-        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-inner-spin-button, 
         input[type=number]::-webkit-outer-spin-button {
             -webkit-appearance: none;
             margin: 0;
         }
-
+        
         /* Optimization for large lists */
         /* .virtual-scroller - content-visibility: auto; removed to prevent empty view issues */
 
@@ -138,8 +138,8 @@
 
         // --- Constants & Helpers ---
 
-        const ROW_HEIGHT = 80;
-        const BUFFER_ITEMS = 5;
+        const ROW_HEIGHT = 80; 
+        const BUFFER_ITEMS = 5; 
 
         const RARITY_MAP = {
             0: { label: "unset", color: "text-gray-400 border-gray-600 bg-gray-800" },
@@ -156,13 +156,13 @@
             let magA = 0, magB = 0;
             for (let i = 0; i < a.length; i++) magA += a[i] * a[i];
             for (let i = 0; i < b.length; i++) magB += b[i] * b[i];
-
+            
             return dot / (Math.sqrt(magA) * Math.sqrt(magB));
         }
 
-        // --- IndexedDB Helpers (FIXED & VERSION BUMPED) ---
+        // --- IndexedDB Helpers ---
         const DB_NAME = 'vmkInventoryDB';
-        const DB_VERSION = 3; // Bumped version to add embeddings store
+        const DB_VERSION = 4; // Bumped version to change keyPath from 'id' to 'type'
         const STORE_ITEMS = 'items';
         const STORE_IMAGES = 'images';
         const STORE_METADATA = 'metadata';
@@ -175,8 +175,22 @@
                 request.onsuccess = () => resolve(request.result);
                 request.onupgradeneeded = (event) => {
                     const db = event.target.result;
+                    
+                    // --- VERSION 4 MIGRATION: Switch from 'id' to 'type' ---
+                    // If upgrading from an older version, we must delete the old stores 
+                    // because we cannot change keyPath in-place.
+                    if (event.oldVersion < 4) {
+                        if (db.objectStoreNames.contains(STORE_ITEMS)) {
+                            db.deleteObjectStore(STORE_ITEMS);
+                        }
+                        if (db.objectStoreNames.contains(STORE_EMBEDDINGS)) {
+                            db.deleteObjectStore(STORE_EMBEDDINGS);
+                        }
+                    }
+                    
                     if (!db.objectStoreNames.contains(STORE_ITEMS)) {
-                        db.createObjectStore(STORE_ITEMS, { keyPath: 'id' });
+                        // KEY CHANGE: keyPath is now 'type'
+                        db.createObjectStore(STORE_ITEMS, { keyPath: 'type' });
                     }
                     if (!db.objectStoreNames.contains(STORE_IMAGES)) {
                         db.createObjectStore(STORE_IMAGES, { keyPath: 'filename' });
@@ -185,7 +199,8 @@
                         db.createObjectStore(STORE_METADATA, { keyPath: 'key' });
                     }
                     if (!db.objectStoreNames.contains(STORE_EMBEDDINGS)) {
-                        db.createObjectStore(STORE_EMBEDDINGS, { keyPath: 'id' });
+                         // KEY CHANGE: keyPath is now 'type' to match items
+                        db.createObjectStore(STORE_EMBEDDINGS, { keyPath: 'type' });
                     }
                 };
             });
@@ -197,7 +212,7 @@
                 const db = await openDB();
                 const tx = db.transaction([STORE_IMAGES], 'readwrite');
                 const imagesStore = tx.objectStore(STORE_IMAGES);
-
+                
                 // Only save new images (merge, don't clear)
                 let newCount = 0;
                 for (const [filename, fileObj] of imageFileMap.entries()) {
@@ -234,10 +249,10 @@
 
                 const db = await openDB();
                 const tx = db.transaction([STORE_ITEMS, STORE_METADATA], 'readwrite');
-
+                
                 // Save items (merge, don't clear)
                 const itemsStore = tx.objectStore(STORE_ITEMS);
-
+                
                 let putCount = 0;
                 items.forEach(item => {
                     try {
@@ -276,14 +291,14 @@
                 const db = await openDB();
                 const tx = db.transaction([STORE_EMBEDDINGS], 'readwrite');
                 const embeddingsStore = tx.objectStore(STORE_EMBEDDINGS);
-
+                
                 let savedCount = 0;
-                for (const [itemId, vector] of embeddingsMap.entries()) {
+                for (const [itemType, vector] of embeddingsMap.entries()) {
                     try {
-                        embeddingsStore.put({ id: itemId, vector: Array.from(vector) });
+                        embeddingsStore.put({ type: itemType, vector: Array.from(vector) });
                         savedCount++;
                     } catch (err) {
-                        console.error("Error saving embedding for item:", itemId, err);
+                        console.error("Error saving embedding for item:", itemType, err);
                     }
                 }
 
@@ -309,17 +324,17 @@
                 const db = await openDB();
                 const tx = db.transaction([STORE_EMBEDDINGS], 'readonly');
                 const embeddingsStore = tx.objectStore(STORE_EMBEDDINGS);
-
+                
                 const embeddingsRecords = await new Promise((resolve, reject) => {
                     const req = embeddingsStore.getAll();
                     req.onsuccess = () => resolve(req.result);
                     req.onerror = () => reject(req.error);
                 });
 
-                // Convert to Map: itemId -> vector array
+                // Convert to Map: itemType -> vector array
                 const embeddingsMap = new Map();
                 for (const record of embeddingsRecords) {
-                    embeddingsMap.set(record.id, record.vector);
+                    embeddingsMap.set(record.type, record.vector);
                 }
 
                 return embeddingsMap;
@@ -333,7 +348,7 @@
             try {
                 const db = await openDB();
                 const tx = db.transaction([STORE_ITEMS, STORE_IMAGES, STORE_METADATA, STORE_EMBEDDINGS], 'readonly');
-
+                
                 // Load items
                 const itemsStore = tx.objectStore(STORE_ITEMS);
                 const items = await new Promise((resolve, reject) => {
@@ -364,9 +379,9 @@
                     req.onerror = () => reject(req.error);
                 });
 
-                const metadata = metadataRecord ? {
-                    timestamp: metadataRecord.timestamp,
-                    Date: metadataRecord.Date
+                const metadata = metadataRecord ? { 
+                    timestamp: metadataRecord.timestamp, 
+                    Date: metadataRecord.Date 
                 } : null;
 
                 // Load embeddings
@@ -377,10 +392,10 @@
                     req.onerror = () => reject(req.error);
                 });
 
-                // Convert embeddings to Map: itemId -> vector array
+                // Convert embeddings to Map: itemType -> vector array
                 const embeddingsMap = new Map();
                 for (const record of embeddingsRecords) {
-                    embeddingsMap.set(record.id, record.vector);
+                    embeddingsMap.set(record.type, record.vector);
                 }
 
                 return { items, imageMap, metadata, embeddingsMap };
@@ -595,14 +610,14 @@
                         "Do you want to continue?"
                     );
                     if (!confirmed) {
-                        e.target.value = '';
+                        e.target.value = ''; 
                         return;
                     }
                 }
 
                 setLoading(true);
                 setError(null);
-
+                
                 try {
                     const files = Array.from(e.target.files);
                     if (files.length === 0) throw new Error("No folder selected or folder is empty.");
@@ -624,7 +639,7 @@
 
                     const text = await readFileAsText(dataFile);
                     const { data: enrichedData, metadata } = parseAndEnrichData(text);
-
+                    
                     // Pass both maps
                     onDataLoaded(enrichedData, urlMap, metadata, fileMap);
 
@@ -649,7 +664,7 @@
                 let text = rawText.trim();
                 // Handle trailing commas if present
                 if (text.endsWith(',') || text.endsWith(',]')) text = text.replace(/,(\s*\]?)$/, '$1');
-
+                
                 // FIXED: Don't blindly wrap in brackets. Try parsing first.
                 let json;
                 try {
@@ -662,7 +677,7 @@
                         throw new Error("Failed to parse JSON. Ensure the file contains a valid JSON array.");
                     }
                 }
-
+                
                 // Handle new format with metadata (object with data property)
                 let dataArray;
                 let metadata = null;
@@ -680,7 +695,7 @@
 
                 // Check direct object
                 let extracted = extractFromObject(json);
-
+                
                 // Check if it got wrapped in an array accidentally or intentionally (length 1 array containing the root object)
                 if (!extracted && Array.isArray(json) && json.length === 1) {
                     extracted = extractFromObject(json[0]);
@@ -697,11 +712,14 @@
                 }
 
                 const enrichedData = dataArray.map((item, idx) => ({
-                    id: item.id || `temp-${idx}`,
+                    // CRITICAL: Prioritize 'type' as the main ID.
+                    // Fallback to existing id or generate temp.
+                    type: item.type || item.id || `temp-${idx}`, 
+                    id: item.id || `temp-${idx}`, // Keep id for legacy/display if needed
                     ...item,
                     name: item.name || "Unknown Item",
                     image: item.image || "",
-                    quantity: item.count !== undefined ? item.count : (item.quantity || 0),
+                    quantity: item.count !== undefined ? item.count : (item.quantity || 0), 
                     price: item.price !== undefined ? item.price : 0,
                     rarity: item.rarity !== undefined ? item.rarity : 0
                 }));
@@ -715,11 +733,11 @@
                         <div className="bg-blue-500/10 p-4 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center">
                             <FolderOpen className="w-12 h-12 text-blue-500" />
                         </div>
-
+                        
                         <h1 className="text-3xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
                             Import Inventory
                         </h1>
-
+                        
                         <p className="text-slate-400 mb-8 leading-relaxed">
                             Select the folder containing your data file and images.
                         </p>
@@ -733,9 +751,9 @@
                             ) : (
                                 <span>Select Folder</span>
                             )}
-                            <input
+                            <input 
                                 ref={inputRef}
-                                type="file"
+                                type="file" 
                                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                 onChange={handleFolderSelect}
                                 disabled={loading}
@@ -758,8 +776,8 @@
             const rarityStyle = RARITY_MAP[item.rarity] || RARITY_MAP[0];
 
             return (
-                <div
-                    style={style}
+                <div 
+                    style={style} 
                     className="absolute w-full flex items-center border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors px-4 group"
                 >
                     <div className="w-12 text-slate-600 text-sm font-mono flex-shrink-0">{index + 1}</div>
@@ -767,10 +785,10 @@
                     <div className="w-20 h-20 p-2 flex-shrink-0">
                         <div className="w-full h-full rounded-lg bg-slate-800/50 border border-slate-700/50 overflow-hidden relative">
                             {imageUrl ? (
-                                <img
-                                    src={imageUrl}
-                                    alt={item.name}
-                                    className="w-full h-full object-contain hover:scale-110 transition-transform duration-300"
+                                <img 
+                                    src={imageUrl} 
+                                    alt={item.name} 
+                                    className="w-full h-full object-contain hover:scale-110 transition-transform duration-300" 
                                     loading="lazy"
                                 />
                             ) : (
@@ -792,8 +810,8 @@
 
                     <div className="w-28 px-2">
                         <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Qty</label>
-                        <input
-                            type="number"
+                        <input 
+                            type="number" 
                             className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 focus:outline-none text-right text-slate-200 transition-all"
                             value={item.quantity}
                             min="0"
@@ -805,8 +823,8 @@
                         <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Price</label>
                         <div className="relative">
                             <span className="absolute left-2 top-1.5 text-slate-500 text-sm">$</span>
-                            <input
-                                type="number"
+                            <input 
+                                type="number" 
                                 className="w-full bg-slate-900 border border-slate-700 rounded pl-5 pr-2 py-1.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 focus:outline-none text-right text-slate-200 transition-all"
                                 value={item.price}
                                 placeholder="0"
@@ -818,7 +836,7 @@
 
                     <div className="w-36 px-2">
                         <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Rarity</label>
-                        <select
+                        <select 
                             className={`w-full border rounded px-2 py-1.5 text-xs font-medium focus:outline-none appearance-none cursor-pointer transition-all ${rarityStyle.color} ${rarityStyle.bg || 'bg-slate-900'}`}
                             value={item.rarity}
                             onChange={(e) => onUpdate(item.actualIndex, 'rarity', parseInt(e.target.value))}
@@ -866,8 +884,9 @@
                 for (let i = startIndex; i <= endIndex; i++) {
                     const item = items[i];
                     rows.push(
-                        <ItemRow
-                            key={item.id || i}
+                        <ItemRow 
+                            // Use TYPE as key
+                            key={item.type || i} 
                             index={i}
                             item={item}
                             style={{ top: i * ROW_HEIGHT, height: ROW_HEIGHT }}
@@ -880,7 +899,7 @@
             }, [startIndex, endIndex, items, imageMap, onUpdateItem]);
 
             return (
-                <div
+                <div 
                     ref={containerRef}
                     className="flex-1 overflow-y-auto relative bg-slate-950 scroll-smooth virtual-scroller"
                     onScroll={handleScroll}
@@ -904,13 +923,13 @@
             const [extractionDate, setExtractionDate] = useState(null);
             const [isLoadingFromDB, setIsLoadingFromDB] = useState(true);
             const [hasStoredData, setHasStoredData] = useState(false);
-
+            
             // AI State
             const [pipeline, setPipeline] = useState(null);
             const [embeddings, setEmbeddings] = useState(null);
-            const [indexingProgress, setIndexingProgress] = useState(0);
+            const [indexingProgress, setIndexingProgress] = useState(0); 
             const [isAIReady, setIsAIReady] = useState(false);
-
+            
             // Search State
             const [searchQuery, setSearchQuery] = useState("");
             const [searchResults, setSearchResults] = useState(null);
@@ -940,10 +959,11 @@
                             if (metadata) {
                                 setExtractionDate(metadata.Date);
                             }
-
+                            
                             // Convert embeddings Map to array format (matching item order)
+                            // Use TYPE for lookup
                             if (embeddingsMap && embeddingsMap.size > 0) {
-                                const embeddingsArray = indexedData.map(item => embeddingsMap.get(item.id) || null);
+                                const embeddingsArray = indexedData.map(item => embeddingsMap.get(item.type) || null);
                                 // Only set if we have at least some embeddings
                                 if (embeddingsArray.some(e => e !== null)) {
                                     setEmbeddings(embeddingsArray);
@@ -965,11 +985,11 @@
             // 1. Initialize Transformers Pipeline
             useEffect(() => {
                 const initAI = async () => {
-                    if (!window.pipeline) return;
+                    if (!window.pipeline) return; 
 
                     try {
                         const pipe = await window.pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', {
-                            quantized: true
+                            quantized: true 
                         });
                         setPipeline(() => pipe);
                         setIsAIReady(true);
@@ -995,34 +1015,32 @@
                 const generateEmbeddings = async () => {
                     // Load existing embeddings from DB
                     const existingEmbeddingsMap = await loadEmbeddingsFromIndexedDB();
-
+                    
                     // Determine which items need embeddings
                     const itemsNeedingEmbeddings = [];
                     const itemsNeedingRegeneration = [];
                     const vectors = [];
-
+                    
                     // Check each item
                     for (let i = 0; i < data.length; i++) {
                         const item = data[i];
-                        const existingEmbedding = existingEmbeddingsMap.get(item.id);
-
+                        // Use TYPE to look up embedding
+                        const existingEmbedding = existingEmbeddingsMap.get(item.type);
+                        
                         if (!existingEmbedding) {
                             // Missing embedding - need to generate
                             itemsNeedingEmbeddings.push({ index: i, item });
                             vectors.push(null); // placeholder
                         } else {
                             // Check if name changed (need to regenerate)
-                            const existingItem = data.find(d => d.id === item.id);
+                            const existingItem = data.find(d => d.type === item.type);
                             // We'll check by comparing with stored item name if we have it
                             // For now, assume if embedding exists and item exists, it's valid
-                            // But we need to track name changes
-                            // Simple approach: if embedding exists, use it (we'll handle name changes in handleUpdateItem)
                             vectors.push(existingEmbedding);
                         }
                     }
-
+                    
                     // Also check for name changes by loading existing items from DB
-                    // For items with embeddings, verify the name hasn't changed
                     const db = await openDB();
                     const tx = db.transaction([STORE_ITEMS], 'readonly');
                     const itemsStore = tx.objectStore(STORE_ITEMS);
@@ -1031,67 +1049,69 @@
                         req.onsuccess = () => resolve(req.result);
                         req.onerror = () => reject(req.error);
                     });
-
-                    const existingItemsMap = new Map(existingItems.map(item => [item.id, item]));
-
+                    
+                    // Use TYPE for map key
+                    const existingItemsMap = new Map(existingItems.map(item => [item.type, item]));
+                    
                     // Re-check for name changes
                     for (let i = 0; i < data.length; i++) {
                         const item = data[i];
-                        const existingItem = existingItemsMap.get(item.id);
-                        const existingEmbedding = existingEmbeddingsMap.get(item.id);
-
+                        const existingItem = existingItemsMap.get(item.type);
+                        const existingEmbedding = existingEmbeddingsMap.get(item.type);
+                        
                         if (existingItem && existingEmbedding && existingItem.name !== item.name) {
                             // Name changed - need to regenerate
                             itemsNeedingRegeneration.push({ index: i, item });
                             vectors[i] = null; // mark for regeneration
                         }
                     }
-
+                    
                     const totalNeedingGeneration = itemsNeedingEmbeddings.length + itemsNeedingRegeneration.length;
-
+                    
                     if (totalNeedingGeneration === 0) {
                         // All embeddings exist and are up to date
                         setEmbeddings(vectors);
                         setIndexingProgress(100);
                         return;
                     }
-
+                    
                     setIndexingProgress(0);
-
+                    
                     // Generate embeddings for items that need them
                     const itemsToProcess = [...itemsNeedingEmbeddings, ...itemsNeedingRegeneration];
                     const embeddingsToSave = new Map();
-
+                    
                     const CHUNK_SIZE = 10;
                     for (let i = 0; i < itemsToProcess.length; i += CHUNK_SIZE) {
                         const chunk = itemsToProcess.slice(i, i + CHUNK_SIZE);
                         const promises = chunk.map(async ({ index, item }) => {
                             const output = await pipeline(`Furniture item: ${item.name}`, { pooling: 'mean', normalize: true });
-                            return { index, itemId: item.id, vector: Array.from(output.data) };
+                            // Return item.type as identifier
+                            return { index, itemType: item.type, vector: Array.from(output.data) };
                         });
-
+                        
                         const results = await Promise.all(promises);
-                        for (const { index, itemId, vector } of results) {
+                        for (const { index, itemType, vector } of results) {
                             vectors[index] = vector;
-                            embeddingsToSave.set(itemId, vector);
+                            embeddingsToSave.set(itemType, vector);
                         }
-
+                        
                         setIndexingProgress(Math.round(((i + CHUNK_SIZE) / itemsToProcess.length) * 100));
-
+                        
                         // Save incrementally
                         if (embeddingsToSave.size >= CHUNK_SIZE) {
                             await saveEmbeddingsToIndexedDB(embeddingsToSave);
                             embeddingsToSave.clear();
                         }
-
+                        
                         await new Promise(r => setTimeout(r, 0));
                     }
-
+                    
                     // Save any remaining embeddings
                     if (embeddingsToSave.size > 0) {
                         await saveEmbeddingsToIndexedDB(embeddingsToSave);
                     }
-
+                    
                     setEmbeddings(vectors);
                     setIndexingProgress(100);
                 };
@@ -1108,9 +1128,9 @@
 
                 if (!embeddings || !pipeline) {
                     const lowerQuery = searchQuery.toLowerCase();
-                    const filtered = data.filter(item =>
-                        item.name.toLowerCase().includes(lowerQuery) ||
-                        item.id.toLowerCase().includes(lowerQuery)
+                    const filtered = data.filter(item => 
+                        item.name.toLowerCase().includes(lowerQuery) || 
+                        (item.type && item.type.toLowerCase().includes(lowerQuery))
                     );
                     setSearchResults(filtered);
                     return;
@@ -1118,20 +1138,20 @@
 
                 const runSearch = async () => {
                     setIsSearching(true);
-
+                    
                     const queryOutput = await pipeline(`Furniture item: ${searchQuery}`, { pooling: 'mean', normalize: true });
                     const queryVector = queryOutput.data;
 
                     const lowerQuery = searchQuery.toLowerCase();
-
+                    
                     const scoredItems = data.map((item, index) => {
                         let score = cosineSimilarity(queryVector, embeddings[index]);
-
+                        
                         if (item.name.toLowerCase().includes(lowerQuery)) {
-                            score += 1.0;
+                            score += 1.0; 
                         }
-
-                        return { ...item, score, actualIndex: index };
+                        
+                        return { ...item, score, actualIndex: index }; 
                     });
 
                     scoredItems.sort((a, b) => b.score - a.score);
@@ -1152,32 +1172,49 @@
                 try {
                     // Load existing data from IndexedDB for smart merging
                     const { items: existingItems, imageMap: existingImageMap, embeddingsMap: existingEmbeddingsMap } = await loadFromIndexedDB();
-
-                    // Create maps for efficient lookup
-                    const existingItemsMap = new Map(existingItems.map(item => [item.id, item]));
+                    
+                    // Create maps for efficient lookup using TYPE
+                    const existingItemsMap = new Map(existingItems.map(item => [item.type, item]));
                     const existingImageFilenames = new Set(existingImageMap.keys());
-
+                    
                     // Build merged data: existing items + new items
                     const mergedItems = [];
+                    const processedItemTypes = new Set(); // Track which items we've already processed
                     const newImageFileMap = new Map();
                     const itemsNeedingEmbeddings = [];
-
+                    
                     // Process new items
                     for (const newItem of loadedData) {
-                        const existingItem = existingItemsMap.get(newItem.id);
+                        // Ensure we have a valid TYPE
+                        if (!newItem.type) {
+                            console.warn('Skipping item without Type:', newItem);
+                            continue;
+                        }
 
+                        const existingItem = existingItemsMap.get(newItem.type);
+                        
                         if (existingItem) {
                             // Item exists - check if name changed (need to regenerate embedding)
                             if (existingItem.name !== newItem.name) {
                                 itemsNeedingEmbeddings.push(newItem);
                             }
-                            // Use existing item but update with any new data
-                            mergedItems.push({ ...existingItem, ...newItem });
+                            // Merge: preserve existing item's data, update with new data (especially quantity)
+                            const mergedItem = {
+                                ...existingItem,
+                                ...newItem,
+                                type: existingItem.type, // Explicitly preserve existing TYPE
+                                price: existingItem.price !== undefined ? existingItem.price : (newItem.price || 0),
+                                rarity: existingItem.rarity !== undefined ? existingItem.rarity : (newItem.rarity || 0),
+                                image: existingItem.image || newItem.image || ''
+                            };
+                            mergedItems.push(mergedItem);
+                            processedItemTypes.add(existingItem.type);
                         } else {
                             // New item - add it
                             mergedItems.push(newItem);
                             itemsNeedingEmbeddings.push(newItem);
-
+                            processedItemTypes.add(newItem.type);
+                            
                             // Check if this item's image is new (match by item.image property = filename)
                             if (newItem.image && !existingImageFilenames.has(newItem.image)) {
                                 // Find the image file that matches this item's image property
@@ -1188,28 +1225,28 @@
                             }
                         }
                     }
-
+                    
                     // Also keep existing items that weren't in the new upload
                     for (const existingItem of existingItems) {
-                        if (!loadedData.find(item => item.id === existingItem.id)) {
+                        if (!processedItemTypes.has(existingItem.type)) {
                             mergedItems.push(existingItem);
                         }
                     }
-
+                    
                     // Add new images that don't match existing items (by item.image property)
                     for (const [filename, file] of loadedFileMap.entries()) {
                         if (!existingImageFilenames.has(filename)) {
                             // Check if any new item uses this image (by matching item.image to filename)
                             const itemUsingImage = loadedData.find(item => item.image === filename);
-                            if (itemUsingImage && !existingItemsMap.has(itemUsingImage.id)) {
+                            if (itemUsingImage && !existingItemsMap.has(itemUsingImage.type)) {
                                 newImageFileMap.set(filename, file);
                             }
                         }
                     }
-
+                    
                     // Index the merged data
                     const indexedData = mergedItems.map((d, i) => ({ ...d, actualIndex: i }));
-
+                    
                     // Build merged image map
                     const mergedImageMap = new Map(existingImageMap);
                     for (const [filename, url] of loadedUrlMap.entries()) {
@@ -1223,7 +1260,7 @@
                             mergedImageMap.set(filename, URL.createObjectURL(file));
                         }
                     }
-
+                    
                     // Revoke old blob URLs if needed
                     if (imageMap) {
                         imageMap.forEach(url => {
@@ -1232,14 +1269,14 @@
                             }
                         });
                     }
-
+                    
                     setData(indexedData);
                     setImageMap(mergedImageMap);
                     setHasStoredData(true);
-
+                    
                     // Clear embeddings to trigger regeneration for new/changed items
                     setEmbeddings(null);
-
+                    
                     if (metadata && metadata.Date) {
                         setExtractionDate(metadata.Date);
                     } else {
@@ -1253,7 +1290,7 @@
 
                     // STEP 2: Save merged data
                     await saveDataToIndexedDB(indexedData, metadata);
-
+                    
                     console.log(`Merged ${mergedItems.length} items (${itemsNeedingEmbeddings.length} new/changed). Saved ${newImageFileMap.size} new images.`);
 
                 } catch (e) {
@@ -1267,14 +1304,14 @@
                     const newData = [...prevData];
                     const oldItem = newData[actualIndex];
                     newData[actualIndex] = { ...newData[actualIndex], [field]: value };
-
+                    
                     // If name changed, regenerate embedding
                     if (field === 'name' && oldItem.name !== value && pipeline) {
                         (async () => {
                             try {
                                 const output = await pipeline(`Furniture item: ${value}`, { pooling: 'mean', normalize: true });
                                 const newVector = Array.from(output.data);
-
+                                
                                 // Update embeddings array
                                 setEmbeddings(prevEmbeddings => {
                                     if (!prevEmbeddings) return prevEmbeddings;
@@ -1282,35 +1319,35 @@
                                     updated[actualIndex] = newVector;
                                     return updated;
                                 });
-
-                                // Save to IndexedDB
+                                
+                                // Save to IndexedDB (Using TYPE as key)
                                 const embeddingsToSave = new Map();
-                                embeddingsToSave.set(newData[actualIndex].id, newVector);
+                                embeddingsToSave.set(newData[actualIndex].type, newVector);
                                 await saveEmbeddingsToIndexedDB(embeddingsToSave);
                             } catch (e) {
                                 console.error('Error regenerating embedding for name change:', e);
                             }
                         })();
                     }
-
+                    
                     // Efficient Save: Only update the Items/JSON store.
                     // DO NOT re-save images here.
                     clearTimeout(window._saveTimeout);
                     window._saveTimeout = setTimeout(async () => {
                         try {
-                            await saveDataToIndexedDB(newData, extractionDate ? { timestamp: Date.now(), Date: extractionDate } : null);
+                             await saveDataToIndexedDB(newData, extractionDate ? { timestamp: Date.now(), Date: extractionDate } : null);
                         } catch (e) {
                             console.error('Error auto-saving changes:', e);
                         }
-                    }, 1000);
-
+                    }, 1000); 
+                    
                     return newData;
                 });
             }, [extractionDate, pipeline]);
 
             const handleExport = async () => {
                 if (!data) return;
-
+                
                 try {
                     // Get current date in the same format as extraction date (matching extractor format)
                     const now = new Date();
@@ -1325,7 +1362,7 @@
                         timeZoneName: 'short'
                     });
                     const currentTimestamp = now.getTime();
-
+                    
                     // Prepare export data in the format expected by import
                     const exportData = data.map(({ actualIndex, score, ...item }) => item);
                     const exportObject = {
@@ -1333,21 +1370,21 @@
                         timestamp: currentTimestamp,
                         Date: currentDate
                     };
-
+                    
                     // Get images from IndexedDB
                     const imageBlobs = await getImagesFromIndexedDB();
-
+                    
                     // Create ZIP file
                     const zip = new JSZip();
-
+                    
                     // Add data file (named exactly as import expects)
                     zip.file("furniture_data.txt", JSON.stringify(exportObject, null, 2));
-
+                    
                     // Add all images
                     for (const [filename, blob] of imageBlobs.entries()) {
                         zip.file(filename, blob);
                     }
-
+                    
                     // Generate ZIP and download
                     const zipBlob = await zip.generateAsync({ type: "blob" });
                     const url = URL.createObjectURL(zipBlob);
@@ -1360,7 +1397,7 @@
                     a.click();
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
-
+                    
                     console.log(`Exported ${exportData.length} items and ${imageBlobs.size} images to ZIP file.`);
                 } catch (e) {
                     console.error('Error exporting data:', e);
@@ -1424,8 +1461,8 @@
                     // Load existing data from IndexedDB
                     const { items: existingItems, imageMap: existingImageMap, embeddingsMap: existingEmbeddingsMap } = await loadFromIndexedDB();
 
-                    // Create maps for efficient lookup
-                    const existingItemsMap = new Map(existingItems.map(item => [item.id, item]));
+                    // Create maps for efficient lookup using TYPE
+                    const existingItemsMap = new Map(existingItems.map(item => [item.type, item]));
                     const existingImageFilenames = new Set(existingImageMap.keys());
 
                     // Build updated data
@@ -1435,7 +1472,8 @@
 
                     // Process loaded items
                     for (const newItem of loadedData) {
-                        const existingItem = existingItemsMap.get(newItem.id);
+                        // Use TYPE for lookup
+                        const existingItem = existingItemsMap.get(newItem.type);
 
                         if (existingItem) {
                             // Item exists - update quantity only, preserve price, rarity, and image
@@ -1463,7 +1501,8 @@
 
                     // Keep existing items that weren't in the update
                     for (const existingItem of existingItems) {
-                        if (!loadedData.find(item => item.id === existingItem.id)) {
+                        // Check using TYPE
+                        if (!loadedData.find(item => item.type === existingItem.type)) {
                             updatedItems.push(existingItem);
                         }
                     }
@@ -1472,7 +1511,7 @@
                     for (const [filename, file] of loadedFileMap.entries()) {
                         if (!existingImageFilenames.has(filename)) {
                             const itemUsingImage = loadedData.find(item => item.image === filename);
-                            if (itemUsingImage && !existingItemsMap.has(itemUsingImage.id)) {
+                            if (itemUsingImage && !existingItemsMap.has(itemUsingImage.type)) {
                                 newImageFileMap.set(filename, file);
                             }
                         }
@@ -1581,6 +1620,8 @@
                 }
 
                 const enrichedData = dataArray.map((item, idx) => ({
+                    // CRITICAL: Type is now primary ID
+                    type: item.type || item.id || `temp-${idx}`,
                     id: item.id || `temp-${idx}`,
                     ...item,
                     name: item.name || "Unknown Item",
@@ -1604,15 +1645,15 @@
 
             const handleSecondClearConfirm = async () => {
                 setShowSecondClearModal(false);
-                if (imageMap) imageMap.forEach(url => URL.revokeObjectURL(url));
-                setData(null);
-                setImageMap(null);
-                setExtractionDate(null);
-                setHasStoredData(false);
-                setEmbeddings(null);
-                setIndexingProgress(0);
-                setSearchQuery("");
-                await clearIndexedDB();
+                    if (imageMap) imageMap.forEach(url => URL.revokeObjectURL(url));
+                    setData(null);
+                    setImageMap(null);
+                    setExtractionDate(null);
+                    setHasStoredData(false);
+                    setEmbeddings(null);
+                    setIndexingProgress(0);
+                    setSearchQuery("");
+                    await clearIndexedDB();
             };
 
             const handleSaveToDesktop = () => {
@@ -1664,8 +1705,8 @@
 
                     db.run(`
                         CREATE TABLE IF NOT EXISTS items (
-                            id TEXT PRIMARY KEY,
-                            type TEXT,
+                            type TEXT PRIMARY KEY, 
+                            id TEXT,
                             name TEXT,
                             quantity INTEGER,
                             price REAL,
@@ -1708,12 +1749,12 @@
                         Date: currentDate
                     };
 
-                    // Save items
-                    const stmt = db.prepare(`INSERT OR REPLACE INTO items (id, type, name, quantity, price, rarity, image, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+                    // Save items - TYPE is primary key
+                    const stmt = db.prepare(`INSERT OR REPLACE INTO items (type, id, name, quantity, price, rarity, image, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
                     for (const item of exportData) {
                         stmt.run([
-                            item.id || '',
                             item.type || item.id || '',
+                            item.id || '',
                             item.name || '',
                             item.quantity || 0,
                             item.price || 0,
@@ -2057,9 +2098,9 @@
                 <div className="flex flex-col h-screen w-full bg-slate-950 text-slate-100 font-sans overflow-hidden">
                     <div className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between shadow-xl z-10 shrink-0 gap-4">
                         <div className="flex items-center space-x-3 shrink-0">
-                            <img
-                                src="./logo.png"
-                                alt="Logo"
+                            <img 
+                                src="./logo.png" 
+                                alt="Logo" 
                                 className="w-16 h-12 rounded-lg shadow-lg shadow-blue-900/20 object-contain bg-slate-800 border border-slate-700"
                                 onError={(e) => {
                                     e.target.style.display = 'none';
@@ -2088,7 +2129,7 @@
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <Search className={`w-4 h-4 ${isSearching ? 'text-blue-400 animate-pulse' : 'text-slate-500'}`} />
                                 </div>
-                                <input
+                                <input 
                                     type="text"
                                     className="block w-full pl-10 pr-10 py-2 border border-slate-700 rounded-xl leading-5 bg-slate-800 text-slate-300 placeholder-slate-500 focus:outline-none focus:bg-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all sm:text-sm"
                                     placeholder={embeddings ? "Search (e.g. 'Office chair' finds 'Stool')" : "Searching by text..."}
@@ -2096,17 +2137,17 @@
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                 />
                                 {searchQuery && (
-                                    <button
+                                    <button 
                                         className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-white"
                                         onClick={() => setSearchQuery('')}
                                     >
                                         <X className="w-4 h-4" />
                                     </button>
                                 )}
-
+                                
                                 {indexingProgress < 100 && indexingProgress > 0 && (
                                     <div className="absolute -bottom-3 left-0 w-full h-1 bg-slate-800 rounded-full overflow-hidden">
-                                        <div
+                                        <div 
                                             className="h-full bg-blue-500 transition-all duration-300"
                                             style={{ width: `${indexingProgress}%` }}
                                         />
@@ -2152,11 +2193,11 @@
                                     <div className="w-32 px-2">Price</div>
                                     <div className="w-36 px-2">Rarity</div>
                                 </div>
-
-                                <VirtualList
-                                    items={displayItems}
-                                    imageMap={imageMap}
-                                    onUpdateItem={handleUpdateItem}
+                                
+                                <VirtualList 
+                                    items={displayItems} 
+                                    imageMap={imageMap} 
+                                    onUpdateItem={handleUpdateItem} 
                                 />
                             </>
                         )}
