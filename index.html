@@ -1,21 +1,26 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Inventory Manager</title>
-    
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
+
     <!-- React & ReactDOM -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+
     <!-- Babel for in-browser JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
+
     <!-- JSZip for ZIP export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
@@ -27,1494 +32,2379 @@
 
     <!-- jsPDF for PDF export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    
+
     <!-- sql.js for SQLite database creation -->
     <script src="https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/sql-wasm.js"></script>
 
     <!-- Transformers.js (AI Model) -->
     <script type="module">
-        import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.16.0';
-        
-        // Skip local model checks since we are in a browser without a file system
-        env.allowLocalModels = false;
-        
-        // Attach to window so our React app can use it
-        window.pipeline = pipeline;
-        window.transformersLoaded = true;
+      import {
+        pipeline,
+        env,
+      } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.16.0";
+
+      // Skip local model checks since we are in a browser without a file system
+      env.allowLocalModels = false;
+
+      // Attach to window so our React app can use it
+      window.pipeline = pipeline;
+      window.transformersLoaded = true;
     </script>
 
     <style>
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar {
-            width: 10px;
-            height: 10px;
-        }
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+      }
 
-        ::-webkit-scrollbar-track {
-            background: #0f172a;
-        }
+      ::-webkit-scrollbar-track {
+        background: #0f172a;
+      }
 
-        ::-webkit-scrollbar-thumb {
-            background: #334155;
-            border-radius: 5px;
-            border: 2px solid #0f172a;
-        }
+      ::-webkit-scrollbar-thumb {
+        background: #334155;
+        border-radius: 5px;
+        border: 2px solid #0f172a;
+      }
 
-        ::-webkit-scrollbar-thumb:hover {
-            background: #475569;
-        }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #475569;
+      }
 
-        input[type=number]::-webkit-inner-spin-button, 
-        input[type=number]::-webkit-outer-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-        
-        .animate-pulse-subtle {
-            animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
+      input[type="number"]::-webkit-inner-spin-button,
+      input[type="number"]::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
 
-        @keyframes pulse-subtle {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
+      .animate-pulse-subtle {
+        animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
 
-        /* Resizer handle */
-        .resizer {
-            width: 8px;
-            background: #1e293b;
-            cursor: col-resize;
-            transition: background 0.2s;
-            z-index: 20;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+      @keyframes pulse-subtle {
+        0%,
+        100% {
+          opacity: 1;
         }
-        .resizer:hover, .resizer.active {
-            background: #3b82f6;
+        50% {
+          opacity: 0.7;
         }
-        .resizer::after {
-            content: "⋮";
-            color: #64748b;
-            font-size: 12px;
-            line-height: 8px;
-        }
+      }
+
+      /* Resizer handle */
+      .resizer {
+        width: 8px;
+        background: #1e293b;
+        cursor: col-resize;
+        transition: background 0.2s;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .resizer:hover,
+      .resizer.active {
+        background: #3b82f6;
+      }
+      .resizer::after {
+        content: "⋮";
+        color: #64748b;
+        font-size: 12px;
+        line-height: 8px;
+      }
     </style>
-</head>
+  </head>
 
-<body class="bg-slate-950 text-slate-100 overflow-hidden">
+  <body class="bg-slate-950 text-slate-100 overflow-hidden">
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef, useMemo, useCallback } = React;
+      const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
-        // --- Icons ---
-        const IconBase = ({ children, className }) => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-                {children}
-            </svg>
+      // --- Icons ---
+      const IconBase = ({ children, className }) => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={className}
+        >
+          {children}
+        </svg>
+      );
+
+      const FolderOpen = (props) => (
+        <IconBase {...props}>
+          <path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-3.25 7a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" />
+        </IconBase>
+      );
+      const Package = (props) => (
+        <IconBase {...props}>
+          <path d="m7.5 4.27 9 5.15" />
+          <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+          <path d="m3.3 7 8.7 5 8.7-5" />
+          <path d="M12 22v-9" />
+        </IconBase>
+      );
+      const Save = (props) => (
+        <IconBase {...props}>
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+          <polyline points="17 21 17 13 7 13 7 21" />
+          <polyline points="7 3 7 8 15 8" />
+        </IconBase>
+      );
+      const AlertCircle = (props) => (
+        <IconBase {...props}>
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" x2="12" y1="8" y2="12" />
+          <line x1="12" x2="12.01" y1="16" y2="16" />
+        </IconBase>
+      );
+      const ImageIcon = (props) => (
+        <IconBase {...props}>
+          <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+          <circle cx="9" cy="9" r="2" />
+          <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+        </IconBase>
+      );
+      const RefreshCw = (props) => (
+        <IconBase {...props}>
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+          <path d="M8 16H3v5" />
+        </IconBase>
+      );
+      const Search = (props) => (
+        <IconBase {...props}>
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </IconBase>
+      );
+      const Brain = (props) => (
+        <IconBase {...props}>
+          <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z" />
+          <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z" />
+        </IconBase>
+      );
+      const X = (props) => (
+        <IconBase {...props}>
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </IconBase>
+      );
+      const ChevronDown = (props) => (
+        <IconBase {...props}>
+          <path d="m6 9 6 6 6-6" />
+        </IconBase>
+      );
+      const FileText = (props) => (
+        <IconBase {...props}>
+          <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="16" x2="8" y1="13" y2="13" />
+          <line x1="16" x2="8" y1="17" y2="17" />
+          <polyline points="10 9 9 9 8 9" />
+        </IconBase>
+      );
+      const Layout = (props) => (
+        <IconBase {...props}>
+          <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+          <path d="M9 3v18" />
+        </IconBase>
+      );
+      const Plus = (props) => (
+        <IconBase {...props}>
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </IconBase>
+      );
+      const ArrowRightLeft = (props) => (
+        <IconBase {...props}>
+          <path d="m16 3 4 4-4 4" />
+          <path d="M20 7H4" />
+          <path d="m8 21-4-4 4-4" />
+          <path d="M4 17h16" />
+        </IconBase>
+      );
+      const List = (props) => (
+        <IconBase {...props}>
+          <line x1="8" x2="21" y1="6" y2="6" />
+          <line x1="8" x2="21" y1="12" y2="12" />
+          <line x1="8" x2="21" y1="18" y2="18" />
+          <line x1="3" x2="3.01" y1="6" y2="6" />
+          <line x1="3" x2="3.01" y1="12" y2="12" />
+          <line x1="3" x2="3.01" y1="18" y2="18" />
+        </IconBase>
+      );
+      const Star = (props) => (
+        <IconBase {...props}>
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        </IconBase>
+      );
+
+      // --- Constants & Helpers ---
+
+      const ROW_HEIGHT = 80;
+      const BUFFER_ITEMS = 5;
+
+      const RARITY_MAP = {
+        0: {
+          label: "Common",
+          color: "text-gray-400 border-gray-600 bg-gray-800",
+        },
+        1: {
+          label: "Rare",
+          color: "text-blue-400 border-blue-600 bg-blue-900/20",
+        },
+        2: {
+          label: "Ultra Rare",
+          color: "text-purple-400 border-purple-600 bg-purple-900/20",
+        },
+      };
+
+      function cosineSimilarity(a, b) {
+        let dot = 0;
+        for (let i = 0; i < a.length; i++) {
+          dot += a[i] * b[i];
+        }
+        let magA = 0,
+          magB = 0;
+        for (let i = 0; i < a.length; i++) magA += a[i] * a[i];
+        for (let i = 0; i < b.length; i++) magB += b[i] * b[i];
+
+        return dot / (Math.sqrt(magA) * Math.sqrt(magB));
+      }
+
+      function generateUUID() {
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+          /[xy]/g,
+          function (c) {
+            var r = (Math.random() * 16) | 0,
+              v = c == "x" ? r : (r & 0x3) | 0x8;
+            return v.toString(16);
+          }
+        );
+      }
+
+      // --- IndexedDB Helpers ---
+      const DB_NAME = "vmkInventoryDB";
+      const DB_VERSION = 5; // Bumped version for sublists
+      const STORE_ITEMS = "items";
+      const STORE_IMAGES = "images";
+      const STORE_METADATA = "metadata";
+      const STORE_EMBEDDINGS = "embeddings";
+      const STORE_SUBLISTS = "sublists";
+
+      function openDB() {
+        return new Promise((resolve, reject) => {
+          const request = indexedDB.open(DB_NAME, DB_VERSION);
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => resolve(request.result);
+          request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+
+            if (event.oldVersion < 4) {
+              if (db.objectStoreNames.contains(STORE_ITEMS))
+                db.deleteObjectStore(STORE_ITEMS);
+              if (db.objectStoreNames.contains(STORE_EMBEDDINGS))
+                db.deleteObjectStore(STORE_EMBEDDINGS);
+            }
+
+            if (!db.objectStoreNames.contains(STORE_ITEMS)) {
+              db.createObjectStore(STORE_ITEMS, { keyPath: "type" });
+            }
+            if (!db.objectStoreNames.contains(STORE_IMAGES)) {
+              db.createObjectStore(STORE_IMAGES, { keyPath: "filename" });
+            }
+            if (!db.objectStoreNames.contains(STORE_METADATA)) {
+              db.createObjectStore(STORE_METADATA, { keyPath: "key" });
+            }
+            if (!db.objectStoreNames.contains(STORE_EMBEDDINGS)) {
+              db.createObjectStore(STORE_EMBEDDINGS, { keyPath: "type" });
+            }
+            // Version 5: Sublists
+            if (!db.objectStoreNames.contains(STORE_SUBLISTS)) {
+              db.createObjectStore(STORE_SUBLISTS, { keyPath: "id" });
+            }
+          };
+        });
+      }
+
+      async function saveImagesToIndexedDB(
+        imageFileMap,
+        existingImageMap = null
+      ) {
+        try {
+          const db = await openDB();
+          const tx = db.transaction([STORE_IMAGES], "readwrite");
+          const imagesStore = tx.objectStore(STORE_IMAGES);
+          for (const [filename, fileObj] of imageFileMap.entries()) {
+            if (!existingImageMap || !existingImageMap.has(filename)) {
+              imagesStore.put({ filename, blob: fileObj });
+            }
+          }
+          await new Promise((resolve, reject) => {
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          });
+        } catch (e) {
+          console.error("Failed to save images:", e);
+          throw e;
+        }
+      }
+
+      async function saveDataToIndexedDB(items, metadata, sublists = null) {
+        try {
+          if (!items || items.length === 0) return;
+          const db = await openDB();
+          const stores = [STORE_ITEMS, STORE_METADATA];
+          if (sublists) stores.push(STORE_SUBLISTS);
+
+          const tx = db.transaction(stores, "readwrite");
+          const itemsStore = tx.objectStore(STORE_ITEMS);
+
+          items.forEach((item) => {
+            try {
+              itemsStore.put(item);
+            } catch (err) {
+              console.error("Error putting item:", item, err);
+            }
+          });
+
+          if (metadata) {
+            tx.objectStore(STORE_METADATA).put({
+              key: "extraction",
+              ...metadata,
+            });
+          }
+
+          if (sublists) {
+            const sublistStore = tx.objectStore(STORE_SUBLISTS);
+            sublists.forEach((list) => sublistStore.put(list));
+          }
+
+          await new Promise((resolve, reject) => {
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          });
+        } catch (e) {
+          console.error("Failed to save data:", e);
+          throw e;
+        }
+      }
+
+      async function saveSublistToDB(sublist) {
+        try {
+          const db = await openDB();
+          const tx = db.transaction([STORE_SUBLISTS], "readwrite");
+          tx.objectStore(STORE_SUBLISTS).put(sublist);
+          await new Promise((resolve, reject) => {
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          });
+        } catch (e) {
+          console.error("Failed to save sublist:", e);
+        }
+      }
+
+      async function saveEmbeddingsToIndexedDB(embeddingsMap) {
+        try {
+          if (!embeddingsMap || embeddingsMap.size === 0) return;
+          const db = await openDB();
+          const tx = db.transaction([STORE_EMBEDDINGS], "readwrite");
+          const embeddingsStore = tx.objectStore(STORE_EMBEDDINGS);
+          for (const [itemType, vector] of embeddingsMap.entries()) {
+            embeddingsStore.put({ type: itemType, vector: Array.from(vector) });
+          }
+          await new Promise((resolve, reject) => {
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          });
+        } catch (e) {
+          console.error("Failed to save embeddings:", e);
+          throw e;
+        }
+      }
+
+      async function loadEmbeddingsFromIndexedDB() {
+        try {
+          const db = await openDB();
+          const tx = db.transaction([STORE_EMBEDDINGS], "readonly");
+          const embeddingsRecords = await new Promise((resolve, reject) => {
+            const req = tx.objectStore(STORE_EMBEDDINGS).getAll();
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+          });
+          const embeddingsMap = new Map();
+          for (const record of embeddingsRecords)
+            embeddingsMap.set(record.type, record.vector);
+          return embeddingsMap;
+        } catch (e) {
+          return new Map();
+        }
+      }
+
+      async function loadFromIndexedDB() {
+        try {
+          const db = await openDB();
+          const tx = db.transaction(
+            [
+              STORE_ITEMS,
+              STORE_IMAGES,
+              STORE_METADATA,
+              STORE_EMBEDDINGS,
+              STORE_SUBLISTS,
+            ],
+            "readonly"
+          );
+
+          const items = await new Promise((res, rej) => {
+            const r = tx.objectStore(STORE_ITEMS).getAll();
+            r.onsuccess = () => res(r.result);
+            r.onerror = () => rej(r.error);
+          });
+          const imageRecords = await new Promise((res, rej) => {
+            const r = tx.objectStore(STORE_IMAGES).getAll();
+            r.onsuccess = () => res(r.result);
+            r.onerror = () => rej(r.error);
+          });
+          const sublists = await new Promise((res, rej) => {
+            const r = tx.objectStore(STORE_SUBLISTS).getAll();
+            r.onsuccess = () => res(r.result);
+            r.onerror = () => rej(r.error);
+          });
+          const metadataRecord = await new Promise((res, rej) => {
+            const r = tx.objectStore(STORE_METADATA).get("extraction");
+            r.onsuccess = () => res(r.result);
+            r.onerror = () => rej(r.error);
+          });
+
+          const imageMap = new Map();
+          for (const record of imageRecords)
+            imageMap.set(record.filename, URL.createObjectURL(record.blob));
+
+          const metadata = metadataRecord
+            ? { timestamp: metadataRecord.timestamp, Date: metadataRecord.Date }
+            : null;
+
+          const embeddingsRecords = await new Promise((res, rej) => {
+            const r = tx.objectStore(STORE_EMBEDDINGS).getAll();
+            r.onsuccess = () => res(r.result);
+            r.onerror = () => rej(r.error);
+          });
+          const embeddingsMap = new Map();
+          for (const record of embeddingsRecords)
+            embeddingsMap.set(record.type, record.vector);
+
+          return { items, imageMap, metadata, embeddingsMap, sublists };
+        } catch (e) {
+          console.error("Error loading from IndexedDB:", e);
+          return {
+            items: [],
+            imageMap: new Map(),
+            metadata: null,
+            embeddingsMap: new Map(),
+            sublists: [],
+          };
+        }
+      }
+
+      async function clearIndexedDB() {
+        try {
+          const db = await openDB();
+          const tx = db.transaction(
+            [
+              STORE_ITEMS,
+              STORE_IMAGES,
+              STORE_METADATA,
+              STORE_EMBEDDINGS,
+              STORE_SUBLISTS,
+            ],
+            "readwrite"
+          );
+          await tx.objectStore(STORE_ITEMS).clear();
+          await tx.objectStore(STORE_IMAGES).clear();
+          await tx.objectStore(STORE_METADATA).clear();
+          await tx.objectStore(STORE_EMBEDDINGS).clear();
+          await tx.objectStore(STORE_SUBLISTS).clear();
+          await new Promise((resolve, reject) => {
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          });
+        } catch (e) {
+          console.error("Error clearing IndexedDB:", e);
+        }
+      }
+
+      async function getImagesFromIndexedDB() {
+        try {
+          const db = await openDB();
+          const tx = db.transaction([STORE_IMAGES], "readonly");
+          const imageRecords = await new Promise((res, rej) => {
+            const r = tx.objectStore(STORE_IMAGES).getAll();
+            r.onsuccess = () => res(r.result);
+            r.onerror = () => rej(r.error);
+          });
+          const imageMap = new Map();
+          for (const record of imageRecords)
+            imageMap.set(record.filename, record.blob);
+          return imageMap;
+        } catch (e) {
+          return new Map();
+        }
+      }
+
+      // --- Components ---
+
+      const FileUploader = ({ onDataLoaded }) => {
+        const [loading, setLoading] = useState(false);
+        const [error, setError] = useState(null);
+        const folderInputRef = useRef(null);
+
+        useEffect(() => {
+          if (folderInputRef.current) {
+            folderInputRef.current.setAttribute("webkitdirectory", "");
+            folderInputRef.current.setAttribute("directory", "");
+          }
+        }, []);
+
+        const readFileAsText = (file) => {
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (event) => resolve(event.target.result);
+            reader.onerror = (error) => reject(error);
+            reader.readAsText(file);
+          });
+        };
+
+        const parseAndEnrichData = (rawText) => {
+          let text = rawText.trim();
+          if (text.endsWith(",") || text.endsWith(",]"))
+            text = text.replace(/,(\s*\]?)$/, "$1");
+
+          let json;
+          try {
+            json = JSON.parse(text);
+          } catch (e) {
+            try {
+              json = JSON.parse(`[${text}]`);
+            } catch (e2) {
+              throw new Error("Failed to parse JSON.");
+            }
+          }
+
+          let dataArray = [];
+          let metadata = null;
+
+          if (json.data && Array.isArray(json.data)) {
+            dataArray = json.data;
+            metadata = { timestamp: json.timestamp, Date: json.Date };
+          } else if (Array.isArray(json)) {
+            dataArray = json;
+          } else if (typeof json === "object") {
+            // Try to extract root object if wrapped weirdly
+            if (json.data) dataArray = json.data;
+            else dataArray = [json]; // Single item?
+          }
+
+          if (!dataArray || !Array.isArray(dataArray))
+            throw new Error("Invalid data format.");
+
+          const enriched = dataArray.map((item, idx) => ({
+            type: item.type || item.id || `temp-${idx}`,
+            id: item.id || `temp-${idx}`,
+            ...item,
+            name: item.name || "Unknown Item",
+            image: item.image || "",
+            quantity:
+              item.count !== undefined ? item.count : item.quantity || 0,
+            price: item.price !== undefined ? item.price : 0,
+            rarity: item.rarity !== undefined ? item.rarity : 0,
+          }));
+
+          return { data: enriched, metadata };
+        };
+
+        const handleFolderSelect = async (e) => {
+          setLoading(true);
+          setError(null);
+          try {
+            const files = Array.from(e.target.files);
+            if (files.length === 0) throw new Error("No files selected.");
+
+            const dataFile = files.find(
+              (f) =>
+                f.name.toLowerCase() === "furniture_data.txt" ||
+                f.name.toLowerCase().endsWith(".json")
+            );
+            if (!dataFile)
+              throw new Error("Could not find 'furniture_data.txt'.");
+
+            const fileMap = new Map();
+            const urlMap = new Map();
+            files.forEach((file) => {
+              if (file.type.startsWith("image/")) {
+                fileMap.set(file.name, file);
+                urlMap.set(file.name, URL.createObjectURL(file));
+              }
+            });
+
+            const text = await readFileAsText(dataFile);
+            const { data, metadata } = parseAndEnrichData(text);
+
+            await onDataLoaded(data, urlMap, metadata, fileMap);
+          } catch (err) {
+            console.error(err);
+            setError(err.message);
+          } finally {
+            setLoading(false);
+          }
+        };
+
+        const handleDbSelect = async (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          setLoading(true);
+          setError(null);
+
+          try {
+            if (!window.initSqlJs) throw new Error("SQL.js not loaded.");
+            const SQL = await window.initSqlJs({
+              locateFile: (file) =>
+                `https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/${file}`,
+            });
+            const buffer = await file.arrayBuffer();
+            const db = new SQL.Database(new Uint8Array(buffer));
+
+            // Load Items
+            const itemsRes = db.exec("SELECT * FROM items");
+            const items = [];
+            if (itemsRes.length > 0) {
+              const cols = itemsRes[0].columns;
+              itemsRes[0].values.forEach((row) => {
+                const item = {};
+                cols.forEach((col, i) => {
+                  if (col === "data") {
+                    try {
+                      Object.assign(item, JSON.parse(row[i]));
+                    } catch (e) {
+                      item[col] = row[i];
+                    }
+                  } else {
+                    item[col] = row[i];
+                  }
+                });
+                items.push(item);
+              });
+            }
+
+            // Load Images
+            const imgRes = db.exec("SELECT filename, data FROM images");
+            const fileMap = new Map();
+            const urlMap = new Map();
+            if (imgRes.length > 0) {
+              imgRes[0].values.forEach((row) => {
+                const filename = row[0];
+                const blobData = row[1];
+                if (blobData) {
+                  const blob = new Blob(
+                    [
+                      blobData instanceof Uint8Array
+                        ? blobData
+                        : new Uint8Array(blobData),
+                    ],
+                    { type: "image/png" }
+                  ); // Defaulting type
+                  fileMap.set(filename, blob);
+                  urlMap.set(filename, URL.createObjectURL(blob));
+                }
+              });
+            }
+
+            // Load Sublists
+            let sublists = [];
+            try {
+              const subRes = db.exec("SELECT * FROM sublists"); // Assuming we export this table
+              // If sublists table exists (might fail on older DBs)
+            } catch (e) {
+              /* ignore */
+            }
+
+            // Load Metadata
+            let metadata = null;
+            try {
+              const metaRes = db.exec(
+                "SELECT value FROM metadata WHERE key='date'"
+              );
+              if (metaRes.length > 0)
+                metadata = { Date: metaRes[0].values[0][0] };
+            } catch (e) {
+              /* ignore */
+            }
+
+            db.close();
+
+            // Enrich items
+            const enriched = items.map((item, idx) => ({
+              type: item.type || item.id || `temp-${idx}`,
+              id: item.id || `temp-${idx}`,
+              ...item,
+              name: item.name || "Unknown Item",
+              image: item.image || "",
+              quantity: item.quantity || 0,
+              price: item.price || 0,
+              rarity: item.rarity !== undefined ? item.rarity : 0,
+            }));
+
+            await onDataLoaded(enriched, urlMap, metadata, fileMap);
+          } catch (err) {
+            console.error(err);
+            setError(err.message);
+          } finally {
+            setLoading(false);
+          }
+        };
+
+        return (
+          <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in duration-700">
+            <div className="bg-slate-900/50 p-10 rounded-2xl border border-slate-800 shadow-2xl max-w-4xl w-full backdrop-blur-sm">
+              <h1 className="text-3xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+                Import Inventory
+              </h1>
+              <p className="text-slate-400 mb-8">
+                Choose how you want to import your inventory data.
+              </p>
+
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <RefreshCw className="w-12 h-12 text-blue-500 animate-spin mb-4" />
+                  <span className="text-slate-300">Processing Data...</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <label className="relative group flex flex-col items-center justify-center px-6 py-8 bg-slate-800 hover:bg-slate-700/80 border border-slate-700 hover:border-blue-500/50 rounded-xl cursor-pointer transition-all hover:scale-[1.02] shadow-lg">
+                    <div className="bg-blue-500/10 p-4 rounded-full mb-4 group-hover:bg-blue-500/20 transition-colors">
+                      <FolderOpen className="w-8 h-8 text-blue-400" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-white mb-2">
+                      Upload New Inventory
+                    </h3>
+                    <p className="text-sm text-slate-400 text-center">
+                      Select folder containing{" "}
+                      <code className="text-blue-300">furniture_data.txt</code>{" "}
+                      and images.
+                    </p>
+                    <input
+                      ref={folderInputRef}
+                      type="file"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      onChange={handleFolderSelect}
+                    />
+                  </label>
+
+                  <label className="relative group flex flex-col items-center justify-center px-6 py-8 bg-slate-800 hover:bg-slate-700/80 border border-slate-700 hover:border-emerald-500/50 rounded-xl cursor-pointer transition-all hover:scale-[1.02] shadow-lg">
+                    <div className="bg-emerald-500/10 p-4 rounded-full mb-4 group-hover:bg-emerald-500/20 transition-colors">
+                      <FileText className="w-8 h-8 text-emerald-400" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-white mb-2">
+                      Import Existing File
+                    </h3>
+                    <p className="text-sm text-slate-400 text-center">
+                      Import a <code className="text-emerald-300">.db</code>{" "}
+                      file.
+                    </p>
+                    <input
+                      type="file"
+                      accept=".db"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      onChange={handleDbSelect}
+                    />
+                  </label>
+                </div>
+              )}
+              {error && (
+                <div className="mt-6 p-4 bg-red-950/30 border border-red-900/50 text-red-200 rounded-lg text-sm flex items-start gap-3 text-left">
+                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-400" />
+                  <span>{error}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      };
+
+      const Modal = ({ isOpen, onClose, title, children, footer }) => {
+        if (!isOpen) return null;
+        return (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={onClose}
+          >
+            <div
+              className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold text-slate-200 mb-4">
+                {title}
+              </h3>
+              <div className="mb-6 text-slate-300">{children}</div>
+              <div className="flex justify-end gap-3">{footer}</div>
+            </div>
+          </div>
+        );
+      };
+
+      const CreateListModal = ({ isOpen, onClose, onCreate }) => {
+        const [name, setName] = useState("");
+        const [type, setType] = useState("transfer");
+
+        if (!isOpen) return null;
+
+        const handleCreate = () => {
+          if (!name.trim()) return;
+          onCreate(name, type);
+          setName("");
+          setType("transfer");
+          onClose();
+        };
+
+        return (
+          <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title="Create New List"
+            footer={
+              <>
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 text-sm text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreate}
+                  className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold"
+                >
+                  Create List
+                </button>
+              </>
+            }
+          >
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                  List Name
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white focus:outline-none focus:border-blue-500"
+                  placeholder="e.g. My Wishlist"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                  List Type
+                </label>
+                <label
+                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    type === "transfer"
+                      ? "bg-blue-900/20 border-blue-500"
+                      : "bg-slate-800 border-slate-700 hover:bg-slate-700"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="listType"
+                    value="transfer"
+                    checked={type === "transfer"}
+                    onChange={() => setType("transfer")}
+                    className="mt-1"
+                  />
+                  <div>
+                    <div className="font-semibold text-blue-400 flex items-center gap-2">
+                      <RefreshCw className="w-4 h-4" /> Transfer Collection
+                    </div>
+                    <div className="text-xs text-slate-400 mt-1">
+                      Allocates items from main inventory. Quantity decreases in
+                      main list.
+                    </div>
+                  </div>
+                </label>
+                <label
+                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    type === "virtual"
+                      ? "bg-emerald-900/20 border-emerald-500"
+                      : "bg-slate-800 border-slate-700 hover:bg-slate-700"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="listType"
+                    value="virtual"
+                    checked={type === "virtual"}
+                    onChange={() => setType("virtual")}
+                    className="mt-1"
+                  />
+                  <div>
+                    <div className="font-semibold text-emerald-400 flex items-center gap-2">
+                      <List className="w-4 h-4" /> Virtual Collection
+                    </div>
+                    <div className="text-xs text-slate-400 mt-1">
+                      Organizational only. Main inventory quantity remains
+                      unchanged.
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </Modal>
+        );
+      };
+
+      const QuantityModal = ({
+        isOpen,
+        onClose,
+        onConfirm,
+        maxQuantity,
+        itemName,
+      }) => {
+        const [qty, setQty] = useState(1);
+        if (!isOpen) return null;
+        return (
+          <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title={`Add ${itemName} to List`}
+            footer={
+              <>
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 text-sm text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    onConfirm(parseInt(qty));
+                    setQty(1);
+                  }}
+                  className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold"
+                >
+                  Add
+                </button>
+              </>
+            }
+          >
+            <div className="space-y-2">
+              <label className="block text-sm text-slate-400">
+                Quantity to allocate (Max: {maxQuantity})
+              </label>
+              <input
+                type="number"
+                min="1"
+                max={maxQuantity}
+                value={qty}
+                onChange={(e) => setQty(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
+          </Modal>
+        );
+      };
+
+      const ExportFormatModal = ({ isOpen, onClose, onSelectFormat }) => {
+        if (!isOpen) return null;
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={onClose}
+          >
+            <div
+              className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold text-slate-200 mb-2">
+                Export
+              </h3>
+              <p className="text-sm text-slate-400 mb-6">
+                Select a format to export to
+              </p>
+              <div className="space-y-2 mb-6">
+                <button
+                  onClick={() => onSelectFormat("csv")}
+                  className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-slate-800 rounded-lg transition-colors border border-slate-700 hover:border-slate-600"
+                >
+                  CSV
+                </button>
+                <button
+                  onClick={() => onSelectFormat("excel")}
+                  className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-slate-800 rounded-lg transition-colors border border-slate-700 hover:border-slate-600"
+                >
+                  Excel
+                </button>
+                <button
+                  onClick={() => onSelectFormat("pdf")}
+                  className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-slate-800 rounded-lg transition-colors border border-slate-700 hover:border-slate-600"
+                >
+                  PDF
+                </button>
+              </div>
+              <div className="flex justify-end">
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const FileMenu = ({
+        onSaveToDesktop,
+        onExportFor,
+        onClear,
+        onUpdateInventory,
+      }) => {
+        const [isOpen, setIsOpen] = useState(false);
+        const menuRef = useRef(null);
+
+        useEffect(() => {
+          const handleClickOutside = (event) => {
+            if (menuRef.current && !menuRef.current.contains(event.target)) {
+              setIsOpen(false);
+            }
+          };
+          if (isOpen) {
+            document.addEventListener("mousedown", handleClickOutside);
+          }
+          return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+          };
+        }, [isOpen]);
+
+        return (
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className="flex items-center space-x-2 px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+            >
+              <span>File</span>
+              <ChevronDown
+                className={`w-4 h-4 transition-transform ${
+                  isOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+            {isOpen && (
+              <div className="absolute right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                <button
+                  onClick={() => {
+                    onUpdateInventory();
+                    setIsOpen(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors border-t border-slate-700"
+                >
+                  Upload New Extraction
+                </button>
+                <button
+                  onClick={() => {
+                    onSaveToDesktop();
+                    setIsOpen(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
+                >
+                  Save to Desktop
+                </button>
+                <button
+                  onClick={() => {
+                    onExportFor();
+                    setIsOpen(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
+                >
+                  Export...
+                </button>
+                <button
+                  onClick={() => {
+                    onClear();
+                    setIsOpen(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors border-t border-slate-700"
+                >
+                  Delete Inventory
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      const ItemRow = React.memo(
+        ({
+          item,
+          index,
+          style,
+          imageMap,
+          onUpdate,
+          contextMenu,
+          onContextMenuOpen,
+          onContextMenuClose,
+          viewMode,
+          activePanel,
+          allocations,
+          onAction,
+        }) => {
+          const imageUrl = imageMap.get(item.image);
+          const rarityStyle = RARITY_MAP[item.rarity] || RARITY_MAP[0];
+          const isContextMenuOpen = contextMenu?.itemType === item.type;
+
+          // Allocation Logic
+          const allocatedQty = allocations
+            ? allocations.get(item.type) || 0
+            : 0;
+          const availableQty = (item.quantity || 0) - allocatedQty;
+          const isAllocated = allocatedQty > 0;
+
+          // View Mode Logic
+          const isSplitView = viewMode === "split";
+          const isSublistMode = viewMode === "sublist"; // Fullscreen sublist
+
+          // In split view, left panel = inventory (show available), right panel = sublist item (show its qty)
+          // If viewing a sublist item, 'item.quantity' passed here is the sublist specific quantity
+
+          const handleContextMenu = (e) => {
+            const isNameArea = e.target.closest(".item-name-area");
+            if (isNameArea) return;
+            e.preventDefault();
+            e.stopPropagation();
+            onContextMenuOpen(item, { x: e.clientX, y: e.clientY });
+          };
+
+          return (
+            <div
+              style={style}
+              className={`absolute w-full flex items-center border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors px-4 group ${
+                isContextMenuOpen ? "bg-slate-800" : ""
+              }`}
+              onContextMenu={handleContextMenu}
+            >
+              <div className="w-8 text-slate-600 text-xs font-mono flex-shrink-0">
+                {index + 1}
+              </div>
+
+              <div className="w-16 h-16 p-1 flex-shrink-0 mr-3">
+                <div className="w-full h-full rounded bg-slate-800/50 border border-slate-700/50 overflow-hidden relative">
+                  {imageUrl ? (
+                    <img
+                      src={imageUrl}
+                      alt={item.name}
+                      className="w-full h-full object-contain"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <ImageIcon className="w-4 h-4 opacity-40" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex-1 min-w-0 item-name-area pr-2">
+                <div
+                  className="font-medium text-slate-200 truncate text-sm"
+                  title={item.name}
+                >
+                  {item.name}
+                </div>
+                <div className="text-[10px] text-slate-500 font-mono truncate">
+                  {item.type}
+                </div>
+              </div>
+
+              {/* Quantity Section */}
+              <div className="w-24 text-right px-2">
+                {isSplitView && activePanel === "left" ? (
+                  // Left Panel (Inventory): Show Available
+                  <div className="flex flex-col items-end">
+                    <span
+                      className={`text-sm font-bold ${
+                        availableQty < 0 ? "text-red-400" : "text-slate-300"
+                      }`}
+                    >
+                      {availableQty}
+                    </span>
+                    {isAllocated && (
+                      <span
+                        className="text-[10px] text-amber-500 flex items-center gap-1"
+                        title={`${allocatedQty} allocated in transfer lists`}
+                      >
+                        {allocatedQty} <Package className="w-3 h-3" />
+                      </span>
+                    )}
+                  </div>
+                ) : isSplitView && activePanel === "right" ? (
+                  // Right Panel (Sublist): Show Sublist Qty (Read Only)
+                  <span className="text-sm font-bold text-slate-300">
+                    {item.quantity}
+                  </span>
+                ) : isSublistMode ? (
+                  // Fullscreen Sublist: Read Only
+                  <span className="text-sm font-bold text-slate-400 cursor-not-allowed">
+                    {item.quantity}
+                  </span>
+                ) : (
+                  // Default: Editable
+                  <div className="relative">
+                    <input
+                      type="number"
+                      className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm focus:border-blue-500 focus:outline-none text-right text-slate-200"
+                      value={item.quantity}
+                      min="0"
+                      onChange={(e) =>
+                        onUpdate(
+                          item.actualIndex,
+                          "quantity",
+                          parseInt(e.target.value) || 0
+                        )
+                      }
+                      onBlur={(e) =>
+                        onUpdate(
+                          item.actualIndex,
+                          "quantity",
+                          parseInt(e.target.value) || 0,
+                          true
+                        )
+                      }
+                    />
+                    {isAllocated && (
+                      <div
+                        className="absolute top-0 right-full mr-2 mt-1 text-amber-500"
+                        title={`${allocatedQty} allocated`}
+                      >
+                        <Package className="w-4 h-4" />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Price & Rarity - Hidden in Split View */}
+              {!isSplitView && (
+                <>
+                  <div className="w-24 px-2">
+                    <div className="relative">
+                      <span className="absolute left-2 top-1.5 text-slate-500 text-xs">
+                        $
+                      </span>
+                      <input
+                        type="number"
+                        className="w-full bg-slate-900 border border-slate-700 rounded pl-4 pr-2 py-1 text-sm focus:border-emerald-500 focus:outline-none text-right text-slate-200"
+                        value={item.price}
+                        placeholder="0"
+                        min="0"
+                        onChange={(e) =>
+                          onUpdate(item.actualIndex, "price", e.target.value)
+                        }
+                        onBlur={(e) =>
+                          onUpdate(
+                            item.actualIndex,
+                            "price",
+                            e.target.value,
+                            true
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="w-28 px-2">
+                    {isSublistMode ? (
+                      <span
+                        className={`block w-full border rounded px-2 py-1 text-[10px] font-medium text-center opacity-70 cursor-not-allowed ${
+                          rarityStyle.color
+                        } ${rarityStyle.bg || "bg-slate-900"}`}
+                      >
+                        {rarityStyle.label}
+                      </span>
+                    ) : (
+                      <select
+                        className={`w-full border rounded px-2 py-1 text-[10px] font-medium focus:outline-none cursor-pointer appearance-none ${
+                          rarityStyle.color
+                        } ${rarityStyle.bg || "bg-slate-900"}`}
+                        value={item.rarity}
+                        onChange={(e) =>
+                          onUpdate(
+                            item.actualIndex,
+                            "rarity",
+                            parseInt(e.target.value)
+                          )
+                        }
+                      >
+                        {Object.entries(RARITY_MAP).map(([val, config]) => (
+                          <option
+                            key={val}
+                            value={val}
+                            className="bg-slate-800 text-slate-200"
+                          >
+                            {config.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        }
+      );
+
+      const VirtualList = ({
+        items,
+        imageMap,
+        onUpdateItem,
+        viewMode,
+        activePanel,
+        allocations,
+        onContextMenuOpen,
+        contextMenu,
+      }) => {
+        const containerRef = useRef(null);
+        const [scrollTop, setScrollTop] = useState(0);
+        const [containerHeight, setContainerHeight] = useState(0);
+
+        useEffect(() => {
+          if (!containerRef.current) return;
+          const resizeObserver = new ResizeObserver((entries) => {
+            for (let entry of entries)
+              setContainerHeight(entry.contentRect.height);
+          });
+          resizeObserver.observe(containerRef.current);
+          return () => resizeObserver.disconnect();
+        }, []);
+
+        const handleScroll = (e) => setScrollTop(e.target.scrollTop);
+
+        const totalHeight = items.length * ROW_HEIGHT;
+        const startIndex = Math.max(
+          0,
+          Math.floor(scrollTop / ROW_HEIGHT) - BUFFER_ITEMS
+        );
+        const endIndex = Math.min(
+          items.length - 1,
+          Math.floor((scrollTop + containerHeight) / ROW_HEIGHT) + BUFFER_ITEMS
         );
 
-        const FolderOpen = (props) => (<IconBase {...props}><path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-3.25 7a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" /></IconBase>);
-        const Package = (props) => (<IconBase {...props}><path d="m7.5 4.27 9 5.15" /><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" /><path d="m3.3 7 8.7 5 8.7-5" /><path d="M12 22v-9" /></IconBase>);
-        const Save = (props) => (<IconBase {...props}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></IconBase>);
-        const AlertCircle = (props) => (<IconBase {...props}><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></IconBase>);
-        const ImageIcon = (props) => (<IconBase {...props}><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></IconBase>);
-        const RefreshCw = (props) => (<IconBase {...props}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></IconBase>);
-        const Search = (props) => (<IconBase {...props}><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></IconBase>);
-        const Brain = (props) => (<IconBase {...props}><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z" /><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z" /></IconBase>);
-        const X = (props) => (<IconBase {...props}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></IconBase>);
-        const ChevronDown = (props) => (<IconBase {...props}><path d="m6 9 6 6 6-6" /></IconBase>);
-        const FileText = (props) => (<IconBase {...props}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><line x1="16" x2="8" y1="13" y2="13" /><line x1="16" x2="8" y1="17" y2="17" /><polyline points="10 9 9 9 8 9" /></IconBase>);
-        const Layout = (props) => (<IconBase {...props}><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><path d="M9 3v18" /></IconBase>);
-        const Plus = (props) => (<IconBase {...props}><path d="M5 12h14" /><path d="M12 5v14" /></IconBase>);
-        const ArrowRightLeft = (props) => (<IconBase {...props}><path d="m16 3 4 4-4 4" /><path d="M20 7H4" /><path d="m8 21-4-4 4-4" /><path d="M4 17h16" /></IconBase>);
-        const List = (props) => (<IconBase {...props}><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></IconBase>);
-        const Star = (props) => (<IconBase {...props}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></IconBase>);
+        const visibleItems = useMemo(() => {
+          const rows = [];
+          for (let i = startIndex; i <= endIndex; i++) {
+            const item = items[i];
+            rows.push(
+              <ItemRow
+                key={item.type || i}
+                index={i}
+                item={item}
+                style={{ top: i * ROW_HEIGHT, height: ROW_HEIGHT }}
+                imageMap={imageMap}
+                onUpdate={onUpdateItem}
+                viewMode={viewMode}
+                activePanel={activePanel}
+                allocations={allocations}
+                onContextMenuOpen={onContextMenuOpen}
+                contextMenu={contextMenu}
+                onContextMenuClose={() => onContextMenuOpen(null, null)}
+              />
+            );
+          }
+          return rows;
+        }, [
+          startIndex,
+          endIndex,
+          items,
+          imageMap,
+          onUpdateItem,
+          viewMode,
+          activePanel,
+          allocations,
+          contextMenu,
+        ]);
 
-        // --- Constants & Helpers ---
+        return (
+          <div
+            ref={containerRef}
+            className="flex-1 overflow-y-auto relative bg-slate-950 scroll-smooth virtual-scroller"
+            onScroll={handleScroll}
+          >
+            <div
+              style={{
+                height: totalHeight,
+                position: "relative",
+                width: "100%",
+              }}
+            >
+              {items.length > 0 ? (
+                visibleItems
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 opacity-60">
+                  <Search className="w-12 h-12 mb-2" />
+                  <span className="text-lg">No matching items found</span>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      };
 
-        const ROW_HEIGHT = 80; 
-        const BUFFER_ITEMS = 5; 
-
-        const RARITY_MAP = {
-            0: { label: "Common", color: "text-gray-400 border-gray-600 bg-gray-800" },
-            1: { label: "Rare", color: "text-blue-400 border-blue-600 bg-blue-900/20" },
-            2: { label: "Ultra Rare", color: "text-purple-400 border-purple-600 bg-purple-900/20" },
+      const PanelHeader = ({
+        side,
+        lists,
+        selectedListId,
+        onSelect,
+        onCreateList,
+        isSplitView,
+        onSwap,
+        onCloseSplit,
+        itemCount,
+      }) => {
+        const selectedList = lists.find((l) => l.id === selectedListId) || {
+          name: "All Items",
+          type: "all",
         };
 
-        function cosineSimilarity(a, b) {
-            let dot = 0;
-            for (let i = 0; i < a.length; i++) {
-                dot += a[i] * b[i];
+        return (
+          <div className="bg-slate-900 border-b border-slate-800 p-3 flex flex-col gap-3 shrink-0">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                  {side === "left" ? "Source" : "Target"}
+                </span>
+                <div className="relative flex-1">
+                  <select
+                    value={selectedListId}
+                    onChange={(e) => onSelect(e.target.value)}
+                    className="w-full appearance-none bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500 cursor-pointer"
+                  >
+                    <option value="all">All Items</option>
+                    <optgroup label="Transfer Collections">
+                      {lists
+                        .filter((l) => l.type === "transfer")
+                        .map((l) => (
+                          <option key={l.id} value={l.id}>
+                            🔄 {l.name}
+                          </option>
+                        ))}
+                    </optgroup>
+                    <optgroup label="Virtual Collections">
+                      {lists
+                        .filter((l) => l.type === "virtual")
+                        .map((l) => (
+                          <option key={l.id} value={l.id}>
+                            📋 {l.name}
+                          </option>
+                        ))}
+                    </optgroup>
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              </div>
+              {side === "right" && isSplitView && (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={onSwap}
+                    className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                    title="Swap Panels"
+                  >
+                    <ArrowRightLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={onCloseSplit}
+                    className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-700 rounded transition-colors"
+                    title="Close Split View"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+              {side === "left" && (
+                <button
+                  onClick={onCreateList}
+                  className="p-1.5 text-blue-400 hover:text-white hover:bg-blue-600 rounded transition-colors"
+                  title="Create List"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            <div className="flex justify-between items-end">
+              <div className="text-xs text-slate-500">
+                {itemCount.toLocaleString()} items
+              </div>
+              {selectedList.type !== "all" && (
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                    selectedList.type === "transfer"
+                      ? "bg-blue-900/20 text-blue-400 border-blue-800"
+                      : "bg-emerald-900/20 text-emerald-400 border-emerald-800"
+                  }`}
+                >
+                  {selectedList.type === "transfer" ? "Transfer" : "Virtual"}
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      };
+
+      const App = () => {
+        // Data
+        const [data, setData] = useState(null);
+        const [imageMap, setImageMap] = useState(null);
+        const [sublists, setSublists] = useState([]);
+        const [metadata, setMetadata] = useState(null);
+
+        // View State
+        const [viewMode, setViewMode] = useState("default"); // 'default', 'sublist', 'split'
+        const [leftListId, setLeftListId] = useState("all");
+        const [rightListId, setRightListId] = useState("all");
+        const [splitRatio, setSplitRatio] = useState(50);
+
+        // Search State
+        const [searchQueryLeft, setSearchQueryLeft] = useState("");
+        const [searchQueryRight, setSearchQueryRight] = useState("");
+
+        // UI State
+        const [contextMenu, setContextMenu] = useState(null); // { item, position, panel: 'left'|'right' }
+        const [modalState, setModalState] = useState({
+          type: null,
+          data: null,
+        }); // type: 'create', 'qty'
+        const [isResizing, setIsResizing] = useState(false);
+
+        // Modal State
+        const [showFirstClearModal, setShowFirstClearModal] = useState(false);
+        const [showSecondClearModal, setShowSecondClearModal] = useState(false);
+        const [showExportFormatModal, setShowExportFormatModal] =
+          useState(false);
+        const [showUpdateConfirmModal, setShowUpdateConfirmModal] =
+          useState(false);
+        const [pendingUpdateData, setPendingUpdateData] = useState(null);
+        const [showSaveToDesktopModal, setShowSaveToDesktopModal] =
+          useState(false);
+        const [isExporting, setIsExporting] = useState(false);
+
+        // File input ref for update inventory
+        const updateInventoryInputRef = useRef(null);
+
+        // Derived State: Allocations Map (ItemType -> TotalAllocated)
+        const allocations = useMemo(() => {
+          const map = new Map();
+          sublists.forEach((list) => {
+            if (list.type === "transfer" && list.items) {
+              list.items.forEach((record) => {
+                const current = map.get(record.itemType) || 0;
+                map.set(record.itemType, current + record.quantity);
+              });
             }
-            let magA = 0, magB = 0;
-            for (let i = 0; i < a.length; i++) magA += a[i] * a[i];
-            for (let i = 0; i < b.length; i++) magB += b[i] * b[i];
-            
-            return dot / (Math.sqrt(magA) * Math.sqrt(magB));
-        }
+          });
+          return map;
+        }, [sublists]);
 
-        function generateUUID() {
-            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-                return v.toString(16);
-            });
-        }
+        // --- Loading & DB ---
+        const [isLoadingFromDB, setIsLoadingFromDB] = useState(true); // Add loading state
 
-        // --- IndexedDB Helpers ---
-        const DB_NAME = 'vmkInventoryDB';
-        const DB_VERSION = 5; // Bumped version for sublists
-        const STORE_ITEMS = 'items';
-        const STORE_IMAGES = 'images';
-        const STORE_METADATA = 'metadata';
-        const STORE_EMBEDDINGS = 'embeddings';
-        const STORE_SUBLISTS = 'sublists';
-
-        function openDB() {
-            return new Promise((resolve, reject) => {
-                const request = indexedDB.open(DB_NAME, DB_VERSION);
-                request.onerror = () => reject(request.error);
-                request.onsuccess = () => resolve(request.result);
-                request.onupgradeneeded = (event) => {
-                    const db = event.target.result;
-                    
-                    if (event.oldVersion < 4) {
-                        if (db.objectStoreNames.contains(STORE_ITEMS)) db.deleteObjectStore(STORE_ITEMS);
-                        if (db.objectStoreNames.contains(STORE_EMBEDDINGS)) db.deleteObjectStore(STORE_EMBEDDINGS);
-                    }
-                    
-                    if (!db.objectStoreNames.contains(STORE_ITEMS)) {
-                        db.createObjectStore(STORE_ITEMS, { keyPath: 'type' });
-                    }
-                    if (!db.objectStoreNames.contains(STORE_IMAGES)) {
-                        db.createObjectStore(STORE_IMAGES, { keyPath: 'filename' });
-                    }
-                    if (!db.objectStoreNames.contains(STORE_METADATA)) {
-                        db.createObjectStore(STORE_METADATA, { keyPath: 'key' });
-                    }
-                    if (!db.objectStoreNames.contains(STORE_EMBEDDINGS)) {
-                        db.createObjectStore(STORE_EMBEDDINGS, { keyPath: 'type' });
-                    }
-                    // Version 5: Sublists
-                    if (!db.objectStoreNames.contains(STORE_SUBLISTS)) {
-                        db.createObjectStore(STORE_SUBLISTS, { keyPath: 'id' });
-                    }
-                };
-            });
-        }
-
-        async function saveImagesToIndexedDB(imageFileMap, existingImageMap = null) {
+        useEffect(() => {
+          const init = async () => {
+            setIsLoadingFromDB(true);
             try {
-                const db = await openDB();
-                const tx = db.transaction([STORE_IMAGES], 'readwrite');
-                const imagesStore = tx.objectStore(STORE_IMAGES);
-                for (const [filename, fileObj] of imageFileMap.entries()) {
-                    if (!existingImageMap || !existingImageMap.has(filename)) {
-                        imagesStore.put({ filename, blob: fileObj });
-                    }
-                }
-                await new Promise((resolve, reject) => {
-                    tx.oncomplete = () => resolve();
-                    tx.onerror = () => reject(tx.error);
-                });
-            } catch (e) { console.error("Failed to save images:", e); throw e; }
-        }
-
-        async function saveDataToIndexedDB(items, metadata, sublists = null) {
-            try {
-                if (!items || items.length === 0) return;
-                const db = await openDB();
-                const stores = [STORE_ITEMS, STORE_METADATA];
-                if (sublists) stores.push(STORE_SUBLISTS);
-                
-                const tx = db.transaction(stores, 'readwrite');
-                const itemsStore = tx.objectStore(STORE_ITEMS);
-                
-                items.forEach(item => {
-                    try { itemsStore.put(item); } catch (err) { console.error("Error putting item:", item, err); }
-                });
-
-                if (metadata) {
-                    tx.objectStore(STORE_METADATA).put({ key: 'extraction', ...metadata });
-                }
-
-                if (sublists) {
-                    const sublistStore = tx.objectStore(STORE_SUBLISTS);
-                    sublists.forEach(list => sublistStore.put(list));
-                }
-
-                await new Promise((resolve, reject) => {
-                    tx.oncomplete = () => resolve();
-                    tx.onerror = () => reject(tx.error);
-                });
-            } catch (e) { console.error("Failed to save data:", e); throw e; }
-        }
-
-        async function saveSublistToDB(sublist) {
-            try {
-                const db = await openDB();
-                const tx = db.transaction([STORE_SUBLISTS], 'readwrite');
-                tx.objectStore(STORE_SUBLISTS).put(sublist);
-                await new Promise((resolve, reject) => {
-                    tx.oncomplete = () => resolve();
-                    tx.onerror = () => reject(tx.error);
-                });
-            } catch (e) { console.error("Failed to save sublist:", e); }
-        }
-
-        async function saveEmbeddingsToIndexedDB(embeddingsMap) {
-            try {
-                if (!embeddingsMap || embeddingsMap.size === 0) return;
-                const db = await openDB();
-                const tx = db.transaction([STORE_EMBEDDINGS], 'readwrite');
-                const embeddingsStore = tx.objectStore(STORE_EMBEDDINGS);
-                for (const [itemType, vector] of embeddingsMap.entries()) {
-                        embeddingsStore.put({ type: itemType, vector: Array.from(vector) });
-                    }
-                await new Promise((resolve, reject) => {
-                    tx.oncomplete = () => resolve();
-                    tx.onerror = () => reject(tx.error);
-                });
-            } catch (e) { console.error("Failed to save embeddings:", e); throw e; }
-        }
-
-        async function loadEmbeddingsFromIndexedDB() {
-            try {
-                const db = await openDB();
-                const tx = db.transaction([STORE_EMBEDDINGS], 'readonly');
-                const embeddingsRecords = await new Promise((resolve, reject) => {
-                    const req = tx.objectStore(STORE_EMBEDDINGS).getAll();
-                    req.onsuccess = () => resolve(req.result);
-                    req.onerror = () => reject(req.error);
-                });
-                const embeddingsMap = new Map();
-                for (const record of embeddingsRecords) embeddingsMap.set(record.type, record.vector);
-                return embeddingsMap;
-            } catch (e) { return new Map(); }
-        }
-
-        async function loadFromIndexedDB() {
-            try {
-                const db = await openDB();
-                const tx = db.transaction([STORE_ITEMS, STORE_IMAGES, STORE_METADATA, STORE_EMBEDDINGS, STORE_SUBLISTS], 'readonly');
-                
-                const items = await new Promise((res, rej) => { const r = tx.objectStore(STORE_ITEMS).getAll(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
-                const imageRecords = await new Promise((res, rej) => { const r = tx.objectStore(STORE_IMAGES).getAll(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
-                const sublists = await new Promise((res, rej) => { const r = tx.objectStore(STORE_SUBLISTS).getAll(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
-                const metadataRecord = await new Promise((res, rej) => { const r = tx.objectStore(STORE_METADATA).get('extraction'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
-                
-                const imageMap = new Map();
-                for (const record of imageRecords) imageMap.set(record.filename, URL.createObjectURL(record.blob));
-
-                const metadata = metadataRecord ? { timestamp: metadataRecord.timestamp, Date: metadataRecord.Date } : null;
-                
-                const embeddingsRecords = await new Promise((res, rej) => { const r = tx.objectStore(STORE_EMBEDDINGS).getAll(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
-                const embeddingsMap = new Map();
-                for (const record of embeddingsRecords) embeddingsMap.set(record.type, record.vector);
-
-                return { items, imageMap, metadata, embeddingsMap, sublists };
+              const loaded = await loadFromIndexedDB();
+              if (loaded.items && loaded.items.length) {
+                setData(loaded.items.map((d, i) => ({ ...d, actualIndex: i })));
+                setImageMap(loaded.imageMap);
+                setSublists(loaded.sublists || []);
+                setMetadata(loaded.metadata);
+              }
             } catch (e) {
-                console.error('Error loading from IndexedDB:', e);
-                return { items: [], imageMap: new Map(), metadata: null, embeddingsMap: new Map(), sublists: [] };
+              console.error(e);
+            } finally {
+              setIsLoadingFromDB(false);
             }
-        }
+          };
+          init();
+        }, []);
 
-        async function clearIndexedDB() {
-            try {
-                const db = await openDB();
-                const tx = db.transaction([STORE_ITEMS, STORE_IMAGES, STORE_METADATA, STORE_EMBEDDINGS, STORE_SUBLISTS], 'readwrite');
-                await tx.objectStore(STORE_ITEMS).clear();
-                await tx.objectStore(STORE_IMAGES).clear();
-                await tx.objectStore(STORE_METADATA).clear();
-                await tx.objectStore(STORE_EMBEDDINGS).clear();
-                await tx.objectStore(STORE_SUBLISTS).clear();
-                await new Promise((resolve, reject) => { tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); });
-            } catch (e) { console.error('Error clearing IndexedDB:', e); }
-        }
+        const handleDataLoaded = async (
+          loadedData,
+          loadedUrlMap,
+          loadedMeta,
+          loadedFileMap
+        ) => {
+          // Save to DB
+          await saveImagesToIndexedDB(loadedFileMap);
+          await saveDataToIndexedDB(loadedData, loadedMeta);
 
-        async function getImagesFromIndexedDB() {
-            try {
-                const db = await openDB();
-                const tx = db.transaction([STORE_IMAGES], 'readonly');
-                const imageRecords = await new Promise((res, rej) => { const r = tx.objectStore(STORE_IMAGES).getAll(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
-                const imageMap = new Map();
-                for (const record of imageRecords) imageMap.set(record.filename, record.blob);
-                return imageMap;
-            } catch (e) { return new Map(); }
-        }
-
-        // --- Components ---
-
-        const FileUploader = ({ onDataLoaded }) => {
-            const [loading, setLoading] = useState(false);
-            const [error, setError] = useState(null);
-            const folderInputRef = useRef(null);
-
-            useEffect(() => {
-                if (folderInputRef.current) {
-                    folderInputRef.current.setAttribute("webkitdirectory", "");
-                    folderInputRef.current.setAttribute("directory", "");
-                }
-            }, []);
-
-            const readFileAsText = (file) => {
-                return new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = (event) => resolve(event.target.result);
-                    reader.onerror = (error) => reject(error);
-                    reader.readAsText(file);
-                });
-            };
-
-            const parseAndEnrichData = (rawText) => {
-                let text = rawText.trim();
-                if (text.endsWith(',') || text.endsWith(',]')) text = text.replace(/,(\s*\]?)$/, '$1');
-                
-                let json;
-                try {
-                    json = JSON.parse(text);
-                } catch (e) {
-                    try { json = JSON.parse(`[${text}]`); } catch (e2) { throw new Error("Failed to parse JSON."); }
-                }
-                
-                let dataArray = [];
-                let metadata = null;
-
-                if (json.data && Array.isArray(json.data)) {
-                    dataArray = json.data;
-                    metadata = { timestamp: json.timestamp, Date: json.Date };
-                } else if (Array.isArray(json)) {
-                    dataArray = json;
-                } else if (typeof json === 'object') {
-                    // Try to extract root object if wrapped weirdly
-                     if (json.data) dataArray = json.data;
-                     else dataArray = [json]; // Single item?
-                }
-
-                if (!dataArray || !Array.isArray(dataArray)) throw new Error("Invalid data format.");
-
-                const enriched = dataArray.map((item, idx) => ({
-                    type: item.type || item.id || `temp-${idx}`, 
-                    id: item.id || `temp-${idx}`,
-                    ...item,
-                    name: item.name || "Unknown Item",
-                    image: item.image || "",
-                    quantity: item.count !== undefined ? item.count : (item.quantity || 0), 
-                    price: item.price !== undefined ? item.price : 0,
-                    rarity: item.rarity !== undefined ? item.rarity : 0
-                }));
-
-                return { data: enriched, metadata };
-            };
-
-            const handleFolderSelect = async (e) => {
-                setLoading(true);
-                setError(null);
-                try {
-                    const files = Array.from(e.target.files);
-                    if (files.length === 0) throw new Error("No files selected.");
-
-                    const dataFile = files.find(f => f.name.toLowerCase() === "furniture_data.txt" || f.name.toLowerCase().endsWith(".json"));
-                    if (!dataFile) throw new Error("Could not find 'furniture_data.txt'.");
-
-                    const fileMap = new Map();
-                    const urlMap = new Map();
-                    files.forEach(file => {
-                        if (file.type.startsWith('image/')) {
-                            fileMap.set(file.name, file);
-                            urlMap.set(file.name, URL.createObjectURL(file));
-                        }
-                    });
-
-                    const text = await readFileAsText(dataFile);
-                    const { data, metadata } = parseAndEnrichData(text);
-                    
-                    await onDataLoaded(data, urlMap, metadata, fileMap);
-                } catch (err) {
-                    console.error(err);
-                    setError(err.message);
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            const handleDbSelect = async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                setLoading(true);
-                setError(null);
-
-                try {
-                    if (!window.initSqlJs) throw new Error("SQL.js not loaded.");
-                    const SQL = await window.initSqlJs({ locateFile: file => `https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/${file}` });
-                    const buffer = await file.arrayBuffer();
-                    const db = new SQL.Database(new Uint8Array(buffer));
-
-                    // Load Items
-                    const itemsRes = db.exec("SELECT * FROM items");
-                const items = [];
-                    if (itemsRes.length > 0) {
-                        const cols = itemsRes[0].columns;
-                        itemsRes[0].values.forEach(row => {
-                    const item = {};
-                            cols.forEach((col, i) => {
-                                if (col === 'data') {
-                                    try { Object.assign(item, JSON.parse(row[i])); } catch(e) { item[col] = row[i]; }
-                        } else {
-                                    item[col] = row[i];
-                        }
-                    });
-                    items.push(item);
-                        });
-                }
-
-                    // Load Images
-                    const imgRes = db.exec("SELECT filename, data FROM images");
-                const fileMap = new Map();
-                    const urlMap = new Map();
-                    if (imgRes.length > 0) {
-                        imgRes[0].values.forEach(row => {
-                            const filename = row[0];
-                            const blobData = row[1];
-                        if (blobData) {
-                                const blob = new Blob([blobData instanceof Uint8Array ? blobData : new Uint8Array(blobData)], { type: 'image/png' }); // Defaulting type
-                                fileMap.set(filename, blob);
-                                urlMap.set(filename, URL.createObjectURL(blob));
-                            }
-                        });
-                    }
-
-                    // Load Sublists
-                    let sublists = [];
-                    try {
-                        const subRes = db.exec("SELECT * FROM sublists"); // Assuming we export this table
-                        // If sublists table exists (might fail on older DBs)
-                    } catch(e) { /* ignore */ }
-
-                    // Load Metadata
-                let metadata = null;
-                    try {
-                        const metaRes = db.exec("SELECT value FROM metadata WHERE key='date'");
-                        if (metaRes.length > 0) metadata = { Date: metaRes[0].values[0][0] };
-                    } catch(e) { /* ignore */ }
-
-                db.close();
-
-                    // Enrich items
-                    const enriched = items.map((item, idx) => ({
-                    type: item.type || item.id || `temp-${idx}`,
-                    id: item.id || `temp-${idx}`,
-                    ...item,
-                    name: item.name || "Unknown Item",
-                    image: item.image || "",
-                    quantity: item.quantity || 0,
-                    price: item.price || 0,
-                    rarity: item.rarity !== undefined ? item.rarity : 0
-                }));
-
-                    await onDataLoaded(enriched, urlMap, metadata, fileMap);
-
-                } catch (err) {
-                    console.error(err);
-                    setError(err.message);
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            return (
-                <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in duration-700">
-                    <div className="bg-slate-900/50 p-10 rounded-2xl border border-slate-800 shadow-2xl max-w-4xl w-full backdrop-blur-sm">
-                        <h1 className="text-3xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">Import Inventory</h1>
-                        <p className="text-slate-400 mb-8">Choose how you want to import your inventory data.</p>
-
-                            {loading ? (
-                            <div className="flex flex-col items-center justify-center py-12">
-                                <RefreshCw className="w-12 h-12 text-blue-500 animate-spin mb-4" />
-                                <span className="text-slate-300">Processing Data...</span>
-                                </div>
-                            ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <label className="relative group flex flex-col items-center justify-center px-6 py-8 bg-slate-800 hover:bg-slate-700/80 border border-slate-700 hover:border-blue-500/50 rounded-xl cursor-pointer transition-all hover:scale-[1.02] shadow-lg">
-                                    <div className="bg-blue-500/10 p-4 rounded-full mb-4 group-hover:bg-blue-500/20 transition-colors">
-                                        <FolderOpen className="w-8 h-8 text-blue-400" />
-                                    </div>
-                                    <h3 className="text-lg font-semibold text-white mb-2">Upload New Inventory</h3>
-                                    <p className="text-sm text-slate-400 text-center">Select folder containing <code className="text-blue-300">furniture_data.txt</code> and images.</p>
-                                    <input ref={folderInputRef} type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFolderSelect} />
-                        </label>
-
-                                <label className="relative group flex flex-col items-center justify-center px-6 py-8 bg-slate-800 hover:bg-slate-700/80 border border-slate-700 hover:border-emerald-500/50 rounded-xl cursor-pointer transition-all hover:scale-[1.02] shadow-lg">
-                                    <div className="bg-emerald-500/10 p-4 rounded-full mb-4 group-hover:bg-emerald-500/20 transition-colors">
-                                        <FileText className="w-8 h-8 text-emerald-400" />
-                                    </div>
-                                    <h3 className="text-lg font-semibold text-white mb-2">Import Existing File</h3>
-                                    <p className="text-sm text-slate-400 text-center">Import a <code className="text-emerald-300">.db</code> file.</p>
-                                    <input type="file" accept=".db" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleDbSelect} />
-                                </label>
-                            </div>
-                        )}
-                        {error && (
-                            <div className="mt-6 p-4 bg-red-950/30 border border-red-900/50 text-red-200 rounded-lg text-sm flex items-start gap-3 text-left">
-                                <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-400" />
-                                <span>{error}</span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
+          // Update State
+          setData(loadedData.map((d, i) => ({ ...d, actualIndex: i })));
+          setImageMap((prev) => {
+            const newMap = new Map(prev);
+            loadedUrlMap.forEach((v, k) => newMap.set(k, v));
+            return newMap;
+          });
+          setMetadata(loadedMeta);
         };
 
-        const Modal = ({ isOpen, onClose, title, children, footer }) => {
-            if (!isOpen) return null;
-            return (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-                    <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                        <h3 className="text-lg font-semibold text-slate-200 mb-4">{title}</h3>
-                        <div className="mb-6 text-slate-300">{children}</div>
-                        <div className="flex justify-end gap-3">{footer}</div>
-                    </div>
-                </div>
-            );
-        };
+        // --- Helpers for Lists ---
+        const getListData = useCallback(
+          (listId, query) => {
+            if (!data) return [];
 
-        const CreateListModal = ({ isOpen, onClose, onCreate }) => {
-            const [name, setName] = useState("");
-            const [type, setType] = useState("transfer");
-
-            if (!isOpen) return null;
-
-            const handleCreate = () => {
-                if (!name.trim()) return;
-                onCreate(name, type);
-                setName("");
-                setType("transfer");
-                onClose();
-            };
-
-            return (
-                <Modal 
-                    isOpen={isOpen} 
-                    onClose={onClose} 
-                    title="Create New List"
-                    footer={
-                        <>
-                            <button onClick={onClose} className="px-4 py-2 text-sm text-slate-400 hover:text-white">Cancel</button>
-                            <button onClick={handleCreate} className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold">Create List</button>
-                        </>
-                    }
-                >
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">List Name</label>
-                            <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white focus:outline-none focus:border-blue-500" placeholder="e.g. My Wishlist" />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">List Type</label>
-                            <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${type === 'transfer' ? 'bg-blue-900/20 border-blue-500' : 'bg-slate-800 border-slate-700 hover:bg-slate-700'}`}>
-                                <input type="radio" name="listType" value="transfer" checked={type === 'transfer'} onChange={() => setType('transfer')} className="mt-1" />
-                                <div>
-                                    <div className="font-semibold text-blue-400 flex items-center gap-2"><RefreshCw className="w-4 h-4"/> Transfer Collection</div>
-                                    <div className="text-xs text-slate-400 mt-1">Allocates items from main inventory. Quantity decreases in main list.</div>
-                                </div>
-                            </label>
-                            <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${type === 'virtual' ? 'bg-emerald-900/20 border-emerald-500' : 'bg-slate-800 border-slate-700 hover:bg-slate-700'}`}>
-                                <input type="radio" name="listType" value="virtual" checked={type === 'virtual'} onChange={() => setType('virtual')} className="mt-1" />
-                                <div>
-                                    <div className="font-semibold text-emerald-400 flex items-center gap-2"><List className="w-4 h-4"/> Virtual Collection</div>
-                                    <div className="text-xs text-slate-400 mt-1">Organizational only. Main inventory quantity remains unchanged.</div>
-                                </div>
-                            </label>
-                        </div>
-                    </div>
-                </Modal>
-            );
-        };
-
-        const QuantityModal = ({ isOpen, onClose, onConfirm, maxQuantity, itemName }) => {
-            const [qty, setQty] = useState(1);
-            if (!isOpen) return null;
-            return (
-                <Modal isOpen={isOpen} onClose={onClose} title={`Add ${itemName} to List`}
-                    footer={
-                        <>
-                            <button onClick={onClose} className="px-4 py-2 text-sm text-slate-400 hover:text-white">Cancel</button>
-                            <button onClick={() => { onConfirm(parseInt(qty)); setQty(1); }} className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold">Add</button>
-                        </>
-                    }
-                >
-                    <div className="space-y-2">
-                        <label className="block text-sm text-slate-400">Quantity to allocate (Max: {maxQuantity})</label>
-                        <input type="number" min="1" max={maxQuantity} value={qty} onChange={e => setQty(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white focus:outline-none focus:border-blue-500" />
-                    </div>
-                </Modal>
-            );
-        };
-
-        const ExportFormatModal = ({ isOpen, onClose, onSelectFormat }) => {
-            if (!isOpen) return null;
-            return (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-                    <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                        <h3 className="text-lg font-semibold text-slate-200 mb-2">Export</h3>
-                        <p className="text-sm text-slate-400 mb-6">Select a format to export to</p>
-                        <div className="space-y-2 mb-6">
-                            <button onClick={() => onSelectFormat('csv')} className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-slate-800 rounded-lg transition-colors border border-slate-700 hover:border-slate-600">CSV</button>
-                            <button onClick={() => onSelectFormat('excel')} className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-slate-800 rounded-lg transition-colors border border-slate-700 hover:border-slate-600">Excel</button>
-                            <button onClick={() => onSelectFormat('pdf')} className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-slate-800 rounded-lg transition-colors border border-slate-700 hover:border-slate-600">PDF</button>
-                        </div>
-                        <div className="flex justify-end">
-                            <button onClick={onClose} className="px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">Cancel</button>
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        const FileMenu = ({ onSaveToDesktop, onExportFor, onClear, onUpdateInventory }) => {
-            const [isOpen, setIsOpen] = useState(false);
-            const menuRef = useRef(null);
-
-            useEffect(() => {
-                const handleClickOutside = (event) => {
-                    if (menuRef.current && !menuRef.current.contains(event.target)) {
-                        setIsOpen(false);
-                    }
-                };
-                if (isOpen) {
-                    document.addEventListener('mousedown', handleClickOutside);
-                }
-                return () => {
-                    document.removeEventListener('mousedown', handleClickOutside);
-                };
-            }, [isOpen]);
-
-            return (
-                <div className="relative" ref={menuRef}>
-                    <button onClick={() => setIsOpen(!isOpen)} className="flex items-center space-x-2 px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
-                        <span>File</span>
-                        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                    </button>
-                    {isOpen && (
-                        <div className="absolute right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden">
-                            <button onClick={() => { onUpdateInventory(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors border-t border-slate-700">Upload New Extraction</button>
-                            <button onClick={() => { onSaveToDesktop(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors">Save to Desktop</button>
-                            <button onClick={() => { onExportFor(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors">Export...</button>
-                            <button onClick={() => { onClear(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors border-t border-slate-700">Delete Inventory</button>
-                        </div>
-                    )}
-                </div>
-            );
-        };
-
-        const ItemRow = React.memo(({ item, index, style, imageMap, onUpdate, contextMenu, onContextMenuOpen, onContextMenuClose, viewMode, activePanel, allocations, onAction }) => {
-            const imageUrl = imageMap.get(item.image);
-            const rarityStyle = RARITY_MAP[item.rarity] || RARITY_MAP[0];
-            const isContextMenuOpen = contextMenu?.itemType === item.type;
-            
-            // Allocation Logic
-            const allocatedQty = allocations ? (allocations.get(item.type) || 0) : 0;
-            const availableQty = (item.quantity || 0) - allocatedQty;
-            const isAllocated = allocatedQty > 0;
-
-            // View Mode Logic
-            const isSplitView = viewMode === 'split';
-            const isSublistMode = viewMode === 'sublist'; // Fullscreen sublist
-            
-            // In split view, left panel = inventory (show available), right panel = sublist item (show its qty)
-            // If viewing a sublist item, 'item.quantity' passed here is the sublist specific quantity
-            
-            const handleContextMenu = (e) => {
-                const isNameArea = e.target.closest('.item-name-area');
-                if (isNameArea) return;
-                e.preventDefault();
-                e.stopPropagation();
-                onContextMenuOpen(item, { x: e.clientX, y: e.clientY });
-            };
-
-            return (
-                <div style={style} className={`absolute w-full flex items-center border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors px-4 group ${isContextMenuOpen ? 'bg-slate-800' : ''}`} onContextMenu={handleContextMenu}>
-                    <div className="w-8 text-slate-600 text-xs font-mono flex-shrink-0">{index + 1}</div>
-
-                    <div className="w-16 h-16 p-1 flex-shrink-0 mr-3">
-                        <div className="w-full h-full rounded bg-slate-800/50 border border-slate-700/50 overflow-hidden relative">
-                            {imageUrl ? (
-                                <img src={imageUrl} alt={item.name} className="w-full h-full object-contain" loading="lazy" />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center"><ImageIcon className="w-4 h-4 opacity-40" /></div>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="flex-1 min-w-0 item-name-area pr-2">
-                        <div className="font-medium text-slate-200 truncate text-sm" title={item.name}>{item.name}</div>
-                        <div className="text-[10px] text-slate-500 font-mono truncate">{item.type}</div>
-                    </div>
-
-                    {/* Quantity Section */}
-                    <div className="w-24 text-right px-2">
-                        {isSplitView && activePanel === 'left' ? (
-                            // Left Panel (Inventory): Show Available
-                            <div className="flex flex-col items-end">
-                                <span className={`text-sm font-bold ${availableQty < 0 ? 'text-red-400' : 'text-slate-300'}`}>
-                                    {availableQty}
-                                </span>
-                                {isAllocated && (
-                                    <span className="text-[10px] text-amber-500 flex items-center gap-1" title={`${allocatedQty} allocated in transfer lists`}>
-                                        {allocatedQty} <Package className="w-3 h-3"/>
-                                    </span>
-                                )}
-                            </div>
-                        ) : isSplitView && activePanel === 'right' ? (
-                            // Right Panel (Sublist): Show Sublist Qty (Read Only)
-                            <span className="text-sm font-bold text-slate-300">{item.quantity}</span>
-                        ) : isSublistMode ? (
-                            // Fullscreen Sublist: Read Only
-                            <span className="text-sm font-bold text-slate-400 cursor-not-allowed">{item.quantity}</span>
-                        ) : (
-                            // Default: Editable
-                            <div className="relative">
-                                <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm focus:border-blue-500 focus:outline-none text-right text-slate-200"
-                                    value={item.quantity} min="0"
-                            onChange={(e) => onUpdate(item.actualIndex, 'quantity', parseInt(e.target.value) || 0)}
-                            onBlur={(e) => onUpdate(item.actualIndex, 'quantity', parseInt(e.target.value) || 0, true)}
-                        />
-                                {isAllocated && (
-                                    <div className="absolute top-0 right-full mr-2 mt-1 text-amber-500" title={`${allocatedQty} allocated`}>
-                                        <Package className="w-4 h-4"/>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Price & Rarity - Hidden in Split View */}
-                    {!isSplitView && (
-                        <>
-                            <div className="w-24 px-2">
-                        <div className="relative">
-                                    <span className="absolute left-2 top-1.5 text-slate-500 text-xs">$</span>
-                                    <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded pl-4 pr-2 py-1 text-sm focus:border-emerald-500 focus:outline-none text-right text-slate-200"
-                                        value={item.price} placeholder="0" min="0"
-                                onChange={(e) => onUpdate(item.actualIndex, 'price', e.target.value)}
-                                onBlur={(e) => onUpdate(item.actualIndex, 'price', e.target.value, true)}
-                            />
-                        </div>
-                    </div>
-                            <div className="w-28 px-2">
-                                {isSublistMode ? (
-                                    <span className={`block w-full border rounded px-2 py-1 text-[10px] font-medium text-center opacity-70 cursor-not-allowed ${rarityStyle.color} ${rarityStyle.bg || 'bg-slate-900'}`}>{rarityStyle.label}</span>
-                                ) : (
-                                    <select className={`w-full border rounded px-2 py-1 text-[10px] font-medium focus:outline-none cursor-pointer appearance-none ${rarityStyle.color} ${rarityStyle.bg || 'bg-slate-900'}`}
-                            value={item.rarity}
-                            onChange={(e) => onUpdate(item.actualIndex, 'rarity', parseInt(e.target.value))}
-                        >
-                            {Object.entries(RARITY_MAP).map(([val, config]) => (
-                                            <option key={val} value={val} className="bg-slate-800 text-slate-200">{config.label}</option>
-                            ))}
-                        </select>
-                                )}
-                            </div>
-                        </>
-                    )}
-                </div>
-            );
-        });
-
-        const VirtualList = ({ items, imageMap, onUpdateItem, viewMode, activePanel, allocations, onContextMenuOpen, contextMenu }) => {
-            const containerRef = useRef(null);
-            const [scrollTop, setScrollTop] = useState(0);
-            const [containerHeight, setContainerHeight] = useState(0);
-
-            useEffect(() => {
-                if (!containerRef.current) return;
-                const resizeObserver = new ResizeObserver(entries => {
-                    for (let entry of entries) setContainerHeight(entry.contentRect.height);
-                });
-                resizeObserver.observe(containerRef.current);
-                return () => resizeObserver.disconnect();
-            }, []);
-
-            const handleScroll = (e) => setScrollTop(e.target.scrollTop);
-
-            const totalHeight = items.length * ROW_HEIGHT;
-            const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - BUFFER_ITEMS);
-            const endIndex = Math.min(items.length - 1, Math.floor((scrollTop + containerHeight) / ROW_HEIGHT) + BUFFER_ITEMS);
-
-            const visibleItems = useMemo(() => {
-                const rows = [];
-                for (let i = startIndex; i <= endIndex; i++) {
-                    const item = items[i];
-                    rows.push(
-                        <ItemRow key={item.type || i} index={i} item={item} style={{ top: i * ROW_HEIGHT, height: ROW_HEIGHT }}
-                            imageMap={imageMap} onUpdate={onUpdateItem} viewMode={viewMode} activePanel={activePanel} allocations={allocations}
-                            onContextMenuOpen={onContextMenuOpen} contextMenu={contextMenu} onContextMenuClose={() => onContextMenuOpen(null, null)}
-                        />
-                    );
-                }
-                return rows;
-            }, [startIndex, endIndex, items, imageMap, onUpdateItem, viewMode, activePanel, allocations, contextMenu]);
-
-            return (
-                <div ref={containerRef} className="flex-1 overflow-y-auto relative bg-slate-950 scroll-smooth virtual-scroller" onScroll={handleScroll}>
-                    <div style={{ height: totalHeight, position: 'relative', width: '100%' }}>
-                        {items.length > 0 ? visibleItems : (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 opacity-60">
-                                <Search className="w-12 h-12 mb-2" />
-                                <span className="text-lg">No matching items found</span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
-        };
-
-        const PanelHeader = ({ side, lists, selectedListId, onSelect, onCreateList, isSplitView, onSwap, onCloseSplit, itemCount }) => {
-            const selectedList = lists.find(l => l.id === selectedListId) || { name: 'All Items', type: 'all' };
-            
-            return (
-                <div className="bg-slate-900 border-b border-slate-800 p-3 flex flex-col gap-3 shrink-0">
-                    <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
-                                {side === 'left' ? 'Source' : 'Target'}
-                            </span>
-                            <div className="relative flex-1">
-                                <select 
-                                    value={selectedListId} 
-                                    onChange={(e) => onSelect(e.target.value)}
-                                    className="w-full appearance-none bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500 cursor-pointer"
-                                >
-                                    <option value="all">All Items</option>
-                                    <optgroup label="Transfer Collections">
-                                        {lists.filter(l => l.type === 'transfer').map(l => <option key={l.id} value={l.id}>🔄 {l.name}</option>)}
-                                    </optgroup>
-                                    <optgroup label="Virtual Collections">
-                                        {lists.filter(l => l.type === 'virtual').map(l => <option key={l.id} value={l.id}>📋 {l.name}</option>)}
-                                    </optgroup>
-                                </select>
-                                <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"/>
-                            </div>
-                        </div>
-                        {side === 'right' && isSplitView && (
-                            <div className="flex items-center gap-1">
-                                <button onClick={onSwap} className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors" title="Swap Panels"><ArrowRightLeft className="w-4 h-4"/></button>
-                                <button onClick={onCloseSplit} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-700 rounded transition-colors" title="Close Split View"><X className="w-4 h-4"/></button>
-                            </div>
-                        )}
-                         {side === 'left' && (
-                             <button onClick={onCreateList} className="p-1.5 text-blue-400 hover:text-white hover:bg-blue-600 rounded transition-colors" title="Create List"><Plus className="w-4 h-4"/></button>
-                         )}
-                    </div>
-                    <div className="flex justify-between items-end">
-                         <div className="text-xs text-slate-500">{itemCount.toLocaleString()} items</div>
-                         {selectedList.type !== 'all' && (
-                             <span className={`text-[10px] px-1.5 py-0.5 rounded border ${selectedList.type === 'transfer' ? 'bg-blue-900/20 text-blue-400 border-blue-800' : 'bg-emerald-900/20 text-emerald-400 border-emerald-800'}`}>
-                                 {selectedList.type === 'transfer' ? 'Transfer' : 'Virtual'}
-                             </span>
-                        )}
-                    </div>
-                </div>
-            );
-        };
-
-        const App = () => {
-            // Data
-            const [data, setData] = useState(null);
-            const [imageMap, setImageMap] = useState(null);
-            const [sublists, setSublists] = useState([]);
-            const [metadata, setMetadata] = useState(null);
-            
-            // View State
-            const [viewMode, setViewMode] = useState('default'); // 'default', 'sublist', 'split'
-            const [leftListId, setLeftListId] = useState('all');
-            const [rightListId, setRightListId] = useState('all');
-            const [splitRatio, setSplitRatio] = useState(50);
-            
-            // Search State
-            const [searchQueryLeft, setSearchQueryLeft] = useState("");
-            const [searchQueryRight, setSearchQueryRight] = useState("");
-            
-            // UI State
-            const [contextMenu, setContextMenu] = useState(null); // { item, position, panel: 'left'|'right' }
-            const [modalState, setModalState] = useState({ type: null, data: null }); // type: 'create', 'qty'
-            const [isResizing, setIsResizing] = useState(false);
-
-            // Modal State
-            const [showFirstClearModal, setShowFirstClearModal] = useState(false);
-            const [showSecondClearModal, setShowSecondClearModal] = useState(false);
-            const [showExportFormatModal, setShowExportFormatModal] = useState(false);
-            const [showUpdateConfirmModal, setShowUpdateConfirmModal] = useState(false);
-            const [pendingUpdateData, setPendingUpdateData] = useState(null);
-            const [showSaveToDesktopModal, setShowSaveToDesktopModal] = useState(false);
-            const [isExporting, setIsExporting] = useState(false);
-
-            // File input ref for update inventory
-            const updateInventoryInputRef = useRef(null);
-
-            // Derived State: Allocations Map (ItemType -> TotalAllocated)
-            const allocations = useMemo(() => {
-                const map = new Map();
-                sublists.forEach(list => {
-                    if (list.type === 'transfer' && list.items) {
-                        list.items.forEach(record => {
-                            const current = map.get(record.itemType) || 0;
-                            map.set(record.itemType, current + record.quantity);
-                        });
-                    }
-                });
-                return map;
-            }, [sublists]);
-
-            // --- Loading & DB ---
-            const [isLoadingFromDB, setIsLoadingFromDB] = useState(true); // Add loading state
-
-            useEffect(() => {
-                const init = async () => {
-                    setIsLoadingFromDB(true);
-                    try {
-                        const loaded = await loadFromIndexedDB();
-                        if (loaded.items && loaded.items.length) {
-                            setData(loaded.items.map((d, i) => ({ ...d, actualIndex: i })));
-                            setImageMap(loaded.imageMap);
-                            setSublists(loaded.sublists || []);
-                            setMetadata(loaded.metadata);
-                        }
-                } catch (e) {
-                        console.error(e);
-                    } finally {
-                        setIsLoadingFromDB(false);
-                    }
-                };
-                init();
-            }, []);
-
-            const handleDataLoaded = async (loadedData, loadedUrlMap, loadedMeta, loadedFileMap) => {
-                // Save to DB
-                await saveImagesToIndexedDB(loadedFileMap);
-                await saveDataToIndexedDB(loadedData, loadedMeta);
-                
-                // Update State
-                setData(loadedData.map((d, i) => ({ ...d, actualIndex: i })));
-                setImageMap(prev => {
-                    const newMap = new Map(prev);
-                    loadedUrlMap.forEach((v, k) => newMap.set(k, v));
-                        return newMap;
-                    });
-                setMetadata(loadedMeta);
-            };
-
-            // --- Helpers for Lists ---
-            const getListData = useCallback((listId, query) => {
-                if (!data) return [];
-                
-                let sourceItems = [];
-                if (listId === 'all') {
-                    sourceItems = data;
-                    } else {
-                    const list = sublists.find(l => l.id === listId);
-                    if (!list) return [];
-                    // Map sublist items (refs) to real data
-                    sourceItems = list.items.map(ref => {
-                        const original = data.find(d => d.type === ref.itemType);
-                        if (!original) return null;
-                        // Return original data but with quantity override from sublist if it's transfer
-                        // actually, virtual lists don't store quantity, but transfer do. 
-                        // For display in sublist view, we want to show the LIST's quantity.
-                        return { ...original, quantity: ref.quantity !== undefined ? ref.quantity : original.quantity };
-                    }).filter(Boolean);
-                }
-
-                if (!query) return sourceItems;
-                return sourceItems.filter(item => item.name.toLowerCase().includes(query.toLowerCase()));
-            }, [data, sublists]);
-
-            // --- Handlers ---
-            const handleUpdateItem = useCallback((actualIndex, field, value, save = false) => {
-                setData(prev => {
-                    const newData = [...prev];
-                    newData[actualIndex] = { ...newData[actualIndex], [field]: value };
-                    if (save) saveDataToIndexedDB(newData, metadata, sublists); // Simplified save
-                    return newData;
-                });
-            }, [metadata, sublists]);
-
-            const handleCreateList = (name, type) => {
-                const newList = { id: generateUUID(), name, type, items: [], createdAt: Date.now() };
-                const newSublists = [...sublists, newList];
-                setSublists(newSublists);
-                saveSublistToDB(newList);
-                
-                // If in split view, set right panel to new list
-                if (viewMode === 'split') setRightListId(newList.id);
-                else {
-                    // Switch to sublist view? Or just stay
-                }
-            };
-
-            const handleAddItemToList = (targetListId, item, qty = 1) => {
-                const targetList = sublists.find(l => l.id === targetListId);
-                if (!targetList) return;
-                
-                // Check exist
-                const existingIndex = targetList.items.findIndex(i => i.itemType === item.type);
-                if (existingIndex >= 0 && targetList.type === 'virtual') return; // Already in virtual
-
-                const newSublists = sublists.map(list => {
-                    if (list.id !== targetListId) return list;
-                    const newItems = [...list.items];
-                    if (existingIndex >= 0) {
-                        // Update qty if transfer
-                        if (list.type === 'transfer') newItems[existingIndex].quantity += qty;
-                        } else {
-                        // Add new
-                        newItems.push({ itemType: item.type, quantity: list.type === 'transfer' ? qty : 1 });
-                    }
-                    return { ...list, items: newItems };
-                });
-                
-                setSublists(newSublists);
-                saveSublistToDB(newSublists.find(l => l.id === targetListId));
-            };
-
-            const handleRemoveFromList = (listId, itemType) => {
-                const newSublists = sublists.map(list => {
-                    if (list.id !== listId) return list;
-                    return { ...list, items: list.items.filter(i => i.itemType !== itemType) };
-                });
-                setSublists(newSublists);
-                saveSublistToDB(newSublists.find(l => l.id === listId));
-            };
-
-            // --- Context Menu Actions ---
-            const onContextMenuOpen = (item, position, panel) => {
-                setContextMenu({ item, position, panel });
-            };
-
-            const handleContextMenuAction = (action, arg) => {
-                const { item, panel } = contextMenu;
-                if (action === 'add') {
-                    const targetList = sublists.find(l => l.id === (panel === 'left' ? rightListId : leftListId)); // Assuming add to OTHER panel
-                    // But requirement says: Left Panel -> Add to Right Panel List
-                    const targetId = rightListId;
-                    const list = sublists.find(l => l.id === targetId);
-                    
-                    if (list.type === 'transfer') {
-                        // Open Qty Modal
-                        // Calculate max available
-                        const allocated = allocations.get(item.type) || 0;
-                        const available = item.quantity - allocated;
-                        setModalState({ type: 'qty', data: { item, max: available, listId: targetId } });
-                } else {
-                        handleAddItemToList(targetId, item);
-                    }
-                } else if (action === 'remove') {
-                    // Remove from the list active in this panel
-                    const listId = panel === 'left' ? leftListId : rightListId;
-                    handleRemoveFromList(listId, item.type);
-                }
-                setContextMenu(null);
-            };
-
-            // --- Export/Import Handlers ---
-            const handleSaveToDesktop = () => {
-                setShowSaveToDesktopModal(true);
-            };
-
-            const handleSaveToDesktopConfirm = async () => {
-                setShowSaveToDesktopModal(false);
-                setIsExporting(true);
-                try {
-                    if (!window.initSqlJs) throw new Error("SQL.js not loaded.");
-                    const SQL = await window.initSqlJs({ locateFile: file => `https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/${file}` });
-                    const db = new SQL.Database();
-
-                    db.run(`CREATE TABLE IF NOT EXISTS items (type TEXT PRIMARY KEY, id TEXT, name TEXT, quantity INTEGER, price REAL, rarity INTEGER, image TEXT, data TEXT);`);
-                    db.run(`CREATE TABLE IF NOT EXISTS images (filename TEXT PRIMARY KEY, data BLOB);`);
-                    db.run(`CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT);`);
-                    db.run(`CREATE TABLE IF NOT EXISTS sublists (id TEXT PRIMARY KEY, name TEXT, type TEXT, items TEXT, createdAt INTEGER, updatedAt INTEGER);`);
-
-                    const now = new Date();
-                    const currentDate = now.toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' });
-                    const currentTimestamp = now.getTime();
-
-                    db.run(`INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)`, ['timestamp', currentTimestamp.toString()]);
-                    db.run(`INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)`, ['date', currentDate]);
-
-                    const exportData = data.map(({ actualIndex, score, ...item }) => item);
-                    const stmt = db.prepare(`INSERT OR REPLACE INTO items (type, id, name, quantity, price, rarity, image, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
-                    for (const item of exportData) {
-                        stmt.run([item.type || item.id || '', item.id || '', item.name || '', item.quantity || 0, item.price || 0, item.rarity || 0, item.image || '', JSON.stringify(item)]);
-                    }
-                    stmt.free();
-
-                    const imageBlobs = await getImagesFromIndexedDB();
-                    const imageStmt = db.prepare(`INSERT OR REPLACE INTO images (filename, data) VALUES (?, ?)`);
-                    for (const [filename, blob] of imageBlobs.entries()) {
-                        const arrayBuffer = await blob.arrayBuffer();
-                        const uint8Array = new Uint8Array(arrayBuffer);
-                        imageStmt.run([filename, uint8Array]);
-                    }
-                    imageStmt.free();
-
-                    if (sublists && sublists.length > 0) {
-                        const sublistStmt = db.prepare(`INSERT OR REPLACE INTO sublists (id, name, type, items, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)`);
-                        for (const list of sublists) {
-                            sublistStmt.run([list.id, list.name, list.type, JSON.stringify(list.items || []), list.createdAt || Date.now(), list.updatedAt || Date.now()]);
-                        }
-                        sublistStmt.free();
-                    }
-
-                    const dbData = db.export();
-                    const dbBlob = new Blob([dbData], { type: 'application/x-sqlite3' });
-                    const url = URL.createObjectURL(dbBlob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    const dateStr = now.toISOString().split('T')[0];
-                    a.download = `my_vmk_furniture_${dateStr}.db`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                    db.close();
-                } catch (e) {
-                    console.error('Error saving to desktop:', e);
-                    alert(`Error saving to desktop: ${e.message}`);
-                } finally {
-                    setIsExporting(false);
-                }
-            };
-
-            const handleExportFor = () => {
-                setShowExportFormatModal(true);
-            };
-
-            const handleExportFormat = async (format) => {
-                setShowExportFormatModal(false);
-                setIsExporting(true);
-                // Simplified - just show message for now
-                alert(`Export to ${format} format - Full implementation needed`);
-                    setIsExporting(false);
-            };
-
-            const handleClear = () => {
-                setShowFirstClearModal(true);
-            };
-
-            const handleFirstClearConfirm = () => {
-                setShowFirstClearModal(false);
-                setShowSecondClearModal(true);
-            };
-
-            const handleSecondClearConfirm = async () => {
-                setShowSecondClearModal(false);
-                await clearIndexedDB();
-                setData(null);
-                setImageMap(null);
-                setSublists([]);
-                setMetadata(null);
-            };
-
-            const handleUpdateInventory = () => {
-                updateInventoryInputRef.current?.click();
-            };
-
-            const handleUpdateInventoryFileSelect = async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                setShowUpdateConfirmModal(true);
-                setPendingUpdateData(file);
-            };
-
-            const handleUpdateInventoryConfirm = async () => {
-                setShowUpdateConfirmModal(false);
-                // Handle update logic here - simplified for now
-                alert('Update inventory - Full implementation needed');
-                setPendingUpdateData(null);
-            };
-
-            // --- Resizer Logic ---
-            const handleMouseMove = useCallback((e) => {
-                if (!isResizing) return;
-                const newRatio = (e.clientX / window.innerWidth) * 100;
-                setSplitRatio(Math.min(80, Math.max(20, newRatio)));
-            }, [isResizing]);
-            
-            const handleMouseUp = useCallback(() => setIsResizing(false), []);
-            useEffect(() => {
-                if (isResizing) {
-                    window.addEventListener('mousemove', handleMouseMove);
-                    window.addEventListener('mouseup', handleMouseUp);
-                } else {
-                    window.removeEventListener('mousemove', handleMouseMove);
-                    window.removeEventListener('mouseup', handleMouseUp);
-                }
-                return () => {
-                    window.removeEventListener('mousemove', handleMouseMove);
-                    window.removeEventListener('mouseup', handleMouseUp);
-                };
-            }, [isResizing, handleMouseMove, handleMouseUp]);
-
-            // --- Render Logic ---
-            const leftItems = getListData(leftListId, searchQueryLeft);
-            const rightItems = getListData(rightListId, searchQueryRight);
-            const isSplitView = viewMode === 'split';
-            
-            // Initial Load / Import Screen
-            if (isLoadingFromDB) {
-                return <div className="flex h-screen items-center justify-center text-slate-400"><RefreshCw className="w-6 h-6 animate-spin mr-2"/> Loading Storage...</div>;
+            let sourceItems = [];
+            if (listId === "all") {
+              sourceItems = data;
+            } else {
+              const list = sublists.find((l) => l.id === listId);
+              if (!list) return [];
+              // Map sublist items (refs) to real data
+              sourceItems = list.items
+                .map((ref) => {
+                  const original = data.find((d) => d.type === ref.itemType);
+                  if (!original) return null;
+                  // Return original data but with quantity override from sublist if it's transfer
+                  // actually, virtual lists don't store quantity, but transfer do.
+                  // For display in sublist view, we want to show the LIST's quantity.
+                  return {
+                    ...original,
+                    quantity:
+                      ref.quantity !== undefined
+                        ? ref.quantity
+                        : original.quantity,
+                  };
+                })
+                .filter(Boolean);
             }
 
-            if (!data) {
-                return <FileUploader onDataLoaded={handleDataLoaded} />;
+            if (!query) return sourceItems;
+            return sourceItems.filter((item) =>
+              item.name.toLowerCase().includes(query.toLowerCase())
+            );
+          },
+          [data, sublists]
+        );
+
+        // --- Handlers ---
+        const handleUpdateItem = useCallback(
+          (actualIndex, field, value, save = false) => {
+            setData((prev) => {
+              const newData = [...prev];
+              newData[actualIndex] = {
+                ...newData[actualIndex],
+                [field]: value,
+              };
+              if (save) saveDataToIndexedDB(newData, metadata, sublists); // Simplified save
+              return newData;
+            });
+          },
+          [metadata, sublists]
+        );
+
+        const handleCreateList = (name, type) => {
+          const newList = {
+            id: generateUUID(),
+            name,
+            type,
+            items: [],
+            createdAt: Date.now(),
+          };
+          const newSublists = [...sublists, newList];
+          setSublists(newSublists);
+          saveSublistToDB(newList);
+
+          // If in split view, set right panel to new list
+          if (viewMode === "split") setRightListId(newList.id);
+          else {
+            // Switch to sublist view? Or just stay
+          }
+        };
+
+        const handleAddItemToList = (targetListId, item, qty = 1) => {
+          const targetList = sublists.find((l) => l.id === targetListId);
+          if (!targetList) return;
+
+          // Check exist
+          const existingIndex = targetList.items.findIndex(
+            (i) => i.itemType === item.type
+          );
+          if (existingIndex >= 0 && targetList.type === "virtual") return; // Already in virtual
+
+          const newSublists = sublists.map((list) => {
+            if (list.id !== targetListId) return list;
+            const newItems = [...list.items];
+            if (existingIndex >= 0) {
+              // Update qty if transfer
+              if (list.type === "transfer")
+                newItems[existingIndex].quantity += qty;
+            } else {
+              // Add new
+              newItems.push({
+                itemType: item.type,
+                quantity: list.type === "transfer" ? qty : 1,
+              });
+            }
+            return { ...list, items: newItems };
+          });
+
+          setSublists(newSublists);
+          saveSublistToDB(newSublists.find((l) => l.id === targetListId));
+        };
+
+        const handleRemoveFromList = (listId, itemType) => {
+          const newSublists = sublists.map((list) => {
+            if (list.id !== listId) return list;
+            return {
+              ...list,
+              items: list.items.filter((i) => i.itemType !== itemType),
+            };
+          });
+          setSublists(newSublists);
+          saveSublistToDB(newSublists.find((l) => l.id === listId));
+        };
+
+        // --- Context Menu Actions ---
+        const onContextMenuOpen = (item, position, panel) => {
+          setContextMenu({ item, position, panel });
+        };
+
+        const handleContextMenuAction = (action, arg) => {
+          const { item, panel } = contextMenu;
+          if (action === "add") {
+            const targetList = sublists.find(
+              (l) => l.id === (panel === "left" ? rightListId : leftListId)
+            ); // Assuming add to OTHER panel
+            // But requirement says: Left Panel -> Add to Right Panel List
+            const targetId = rightListId;
+            const list = sublists.find((l) => l.id === targetId);
+
+            if (list.type === "transfer") {
+              // Open Qty Modal
+              // Calculate max available
+              const allocated = allocations.get(item.type) || 0;
+              const available = item.quantity - allocated;
+              setModalState({
+                type: "qty",
+                data: { item, max: available, listId: targetId },
+              });
+            } else {
+              handleAddItemToList(targetId, item);
+            }
+          } else if (action === "remove") {
+            // Remove from the list active in this panel
+            const listId = panel === "left" ? leftListId : rightListId;
+            handleRemoveFromList(listId, item.type);
+          }
+          setContextMenu(null);
+        };
+
+        // --- Export/Import Handlers ---
+        const handleSaveToDesktop = () => {
+          setShowSaveToDesktopModal(true);
+        };
+
+        const handleSaveToDesktopConfirm = async () => {
+          setShowSaveToDesktopModal(false);
+          setIsExporting(true);
+          try {
+            if (!window.initSqlJs) throw new Error("SQL.js not loaded.");
+            const SQL = await window.initSqlJs({
+              locateFile: (file) =>
+                `https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/${file}`,
+            });
+            const db = new SQL.Database();
+
+            db.run(
+              `CREATE TABLE IF NOT EXISTS items (type TEXT PRIMARY KEY, id TEXT, name TEXT, quantity INTEGER, price REAL, rarity INTEGER, image TEXT, data TEXT);`
+            );
+            db.run(
+              `CREATE TABLE IF NOT EXISTS images (filename TEXT PRIMARY KEY, data BLOB);`
+            );
+            db.run(
+              `CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT);`
+            );
+            db.run(
+              `CREATE TABLE IF NOT EXISTS sublists (id TEXT PRIMARY KEY, name TEXT, type TEXT, items TEXT, createdAt INTEGER, updatedAt INTEGER);`
+            );
+
+            const now = new Date();
+            const currentDate = now.toLocaleString("en-US", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+              timeZoneName: "short",
+            });
+            const currentTimestamp = now.getTime();
+
+            db.run(
+              `INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)`,
+              ["timestamp", currentTimestamp.toString()]
+            );
+            db.run(
+              `INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)`,
+              ["date", currentDate]
+            );
+
+            const exportData = data.map(
+              ({ actualIndex, score, ...item }) => item
+            );
+            const stmt = db.prepare(
+              `INSERT OR REPLACE INTO items (type, id, name, quantity, price, rarity, image, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+            );
+            for (const item of exportData) {
+              stmt.run([
+                item.type || item.id || "",
+                item.id || "",
+                item.name || "",
+                item.quantity || 0,
+                item.price || 0,
+                item.rarity || 0,
+                item.image || "",
+                JSON.stringify(item),
+              ]);
+            }
+            stmt.free();
+
+            const imageBlobs = await getImagesFromIndexedDB();
+            const imageStmt = db.prepare(
+              `INSERT OR REPLACE INTO images (filename, data) VALUES (?, ?)`
+            );
+            for (const [filename, blob] of imageBlobs.entries()) {
+              const arrayBuffer = await blob.arrayBuffer();
+              const uint8Array = new Uint8Array(arrayBuffer);
+              imageStmt.run([filename, uint8Array]);
+            }
+            imageStmt.free();
+
+            if (sublists && sublists.length > 0) {
+              const sublistStmt = db.prepare(
+                `INSERT OR REPLACE INTO sublists (id, name, type, items, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)`
+              );
+              for (const list of sublists) {
+                sublistStmt.run([
+                  list.id,
+                  list.name,
+                  list.type,
+                  JSON.stringify(list.items || []),
+                  list.createdAt || Date.now(),
+                  list.updatedAt || Date.now(),
+                ]);
+              }
+              sublistStmt.free();
             }
 
-            return (
-                <div className="flex flex-col h-screen w-full bg-slate-950 text-slate-100 font-sans overflow-hidden">
-                    {/* Header - Adaptive */}
-                    {!isSplitView && (
-                        <div className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between shadow-xl shrink-0">
-                            <h1 className="text-xl font-bold text-white flex items-center gap-2"><Package className="text-blue-500"/> Inventory Manager</h1>
-                            <div className="flex gap-3">
-                                <button onClick={() => setViewMode('split')} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-                                    <Layout className="w-4 h-4"/> Split View
-                                </button>
-                                {data && (
-                                    <FileMenu
-                                        onSaveToDesktop={handleSaveToDesktop}
-                                        onExportFor={handleExportFor}
-                                        onClear={handleClear}
-                                        onUpdateInventory={handleUpdateInventory}
-                                    />
-                                )}
-                            </div>
-                        </div>
-                    )}
+            const dbData = db.export();
+            const dbBlob = new Blob([dbData], {
+              type: "application/x-sqlite3",
+            });
+            const url = URL.createObjectURL(dbBlob);
+            const a = document.createElement("a");
+            a.href = url;
+            const dateStr = now.toISOString().split("T")[0];
+            a.download = `my_vmk_furniture_${dateStr}.db`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            db.close();
+          } catch (e) {
+            console.error("Error saving to desktop:", e);
+            alert(`Error saving to desktop: ${e.message}`);
+          } finally {
+            setIsExporting(false);
+          }
+        };
 
-                    {/* Main Content Area */}
-                    <div className="flex-1 flex overflow-hidden relative">
-                        {/* Left Panel */}
-                        <div className="flex flex-col flex-1 min-w-0" style={{ flexBasis: isSplitView ? `${splitRatio}%` : '100%' }}>
-                            <PanelHeader 
-                                side="left" 
-                                lists={sublists} 
-                                selectedListId={leftListId} 
-                                onSelect={setLeftListId} 
-                                onCreateList={() => setModalState({ type: 'create' })}
-                                itemCount={leftItems.length}
-                            />
-                            {/* Search Left */}
-                            <div className="p-2 bg-slate-900/50 border-b border-slate-800">
-                                <div className="relative">
-                                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"/>
-                                    <input type="text" placeholder="Search..." value={searchQueryLeft} onChange={e => setSearchQueryLeft(e.target.value)} 
-                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"/>
-                                    </div>
-                            </div>
-                            
-                            {/* Header Row */}
-                            <div className="flex items-center bg-slate-900/80 backdrop-blur border-b border-slate-800 px-4 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider shrink-0 select-none">
-                                <div className="w-8">#</div>
-                                <div className="w-16 mr-3">Img</div>
-                                <div className="flex-1">Details</div>
-                                <div className="w-24 px-2 text-right">Qty</div>
-                                {!isSplitView && (
-                                    <>
-                                        <div className="w-24 px-2 text-right">Price</div>
-                                        <div className="w-28 px-2">Rarity</div>
-                                    </>
-                                    )}
-                                </div>
+        const handleExportFor = () => {
+          setShowExportFormatModal(true);
+        };
 
-                            <VirtualList 
-                                items={leftItems} 
-                                imageMap={imageMap} 
-                                onUpdateItem={handleUpdateItem} 
-                                viewMode={isSplitView ? 'split' : (leftListId !== 'all' ? 'sublist' : 'default')} 
-                                activePanel="left"
-                                allocations={allocations}
-                                onContextMenuOpen={(item, pos) => onContextMenuOpen(item, pos, 'left')}
-                                contextMenu={contextMenu}
-                            />
-                    </div>
+        const handleExportFormat = async (format) => {
+          setShowExportFormatModal(false);
+          setIsExporting(true);
+          // Simplified - just show message for now
+          alert(`Export to ${format} format - Full implementation needed`);
+          setIsExporting(false);
+        };
 
-                        {/* Divider & Right Panel (Split View Only) */}
-                        {isSplitView && (
-                            <>
-                                <div className="resizer" onMouseDown={() => setIsResizing(true)}></div>
-                                <div className="flex flex-col min-w-0 border-l border-slate-800" style={{ flexBasis: `${100 - splitRatio}%` }}>
-                                    <PanelHeader 
-                                        side="right" 
-                                        lists={sublists} 
-                                        selectedListId={rightListId} 
-                                        onSelect={setRightListId} 
-                                        isSplitView={true}
-                                        onSwap={() => { const temp = leftListId; setLeftListId(rightListId); setRightListId(temp); }}
-                                        onCloseSplit={() => setViewMode('default')}
-                                        itemCount={rightItems.length}
-                                    />
-                                    {/* Search Right */}
-                                    <div className="p-2 bg-slate-900/50 border-b border-slate-800">
-                                        <div className="relative">
-                                            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"/>
-                                            <input type="text" placeholder="Search..." value={searchQueryRight} onChange={e => setSearchQueryRight(e.target.value)} 
-                                                className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"/>
-                                        </div>
-                                    </div>
+        const handleClear = () => {
+          setShowFirstClearModal(true);
+        };
 
-                                    {/* Header Row Right */}
-                                    <div className="flex items-center bg-slate-900/80 backdrop-blur border-b border-slate-800 px-4 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider shrink-0 select-none">
-                                        <div className="w-8">#</div>
-                                        <div className="w-16 mr-3">Img</div>
-                                        <div className="flex-1">Details</div>
-                                        <div className="w-24 px-2 text-right">Qty</div>
-                                </div>
-                                
-                                <VirtualList 
-                                        items={rightItems} 
-                                    imageMap={imageMap} 
-                                    onUpdateItem={handleUpdateItem} 
-                                        viewMode="split" 
-                                        activePanel="right"
-                                        allocations={allocations}
-                                        onContextMenuOpen={(item, pos) => onContextMenuOpen(item, pos, 'right')}
-                                        contextMenu={contextMenu}
-                                    />
-                                </div>
-                            </>
-                        )}
-                    </div>
+        const handleFirstClearConfirm = () => {
+          setShowFirstClearModal(false);
+          setShowSecondClearModal(true);
+        };
 
-                    {/* Modals & Context Menu */}
-                    <CreateListModal isOpen={modalState.type === 'create'} onClose={() => setModalState({ type: null })} onCreate={handleCreateList} />
-                    
-                    {modalState.type === 'qty' && (
-                        <QuantityModal 
-                            isOpen={true} 
-                            onClose={() => setModalState({ type: null })} 
-                            itemName={modalState.data.item.name}
-                            maxQuantity={modalState.data.max}
-                            onConfirm={(qty) => { handleAddItemToList(modalState.data.listId, modalState.data.item, qty); setModalState({ type: null }); }}
-                        />
-                    )}
+        const handleSecondClearConfirm = async () => {
+          setShowSecondClearModal(false);
+          await clearIndexedDB();
+          setData(null);
+          setImageMap(null);
+          setSublists([]);
+          setMetadata(null);
+        };
 
-                    {contextMenu && (
-                        <div className="fixed z-[100] bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 min-w-[200px]" 
-                             style={{ top: Math.min(contextMenu.position.y, window.innerHeight - 150), left: Math.min(contextMenu.position.x, window.innerWidth - 200) }} 
-                             onClick={(e) => { e.stopPropagation(); setContextMenu(null); }}>
-                             
-                            {/* Actions Logic */}
-                            {contextMenu.panel === 'left' && isSplitView && rightListId !== 'all' && (
-                                <>
-                                    <button onClick={() => handleContextMenuAction('add')} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors">
-                                        Add to "{sublists.find(l => l.id === rightListId)?.name}"
-                                    </button>
-                                    <div className="h-px bg-slate-700 my-1"></div>
-                                </>
-                            )}
-                            {contextMenu.panel === 'right' && isSplitView && rightListId !== 'all' && (
-                                <button onClick={() => handleContextMenuAction('remove')} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-slate-700 transition-colors">
-                                    Remove from {sublists.find(l => l.id === rightListId)?.name}
-                                </button>
-                            )}
-                            
-                            {/* Generic Actions */}
-                            <button className="w-full text-left px-4 py-2 text-sm text-slate-400 hover:bg-slate-700 transition-colors">View Details</button>
-                        </div>
-                    )}
+        const handleUpdateInventory = () => {
+          updateInventoryInputRef.current?.click();
+        };
 
-                    {/* Export/Import Modals */}
-                    <Modal
-                        isOpen={showFirstClearModal}
-                        onClose={() => setShowFirstClearModal(false)}
-                        title="Delete Inventory?"
-                        footer={
-                            <>
-                                <button onClick={() => setShowFirstClearModal(false)} className="px-4 py-2 text-sm text-slate-400 hover:text-white">Cancel</button>
-                                <button onClick={handleFirstClearConfirm} className="px-4 py-2 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg font-semibold">Next</button>
-                            </>
-                        }
-                    >
-                        <p className="text-slate-300">This will clear your inventory manager. Make sure you have already saved a copy to your Desktop.</p>
-                    </Modal>
+        const handleUpdateInventoryFileSelect = async (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          setShowUpdateConfirmModal(true);
+          setPendingUpdateData(file);
+        };
 
-                    <Modal
-                        isOpen={showSecondClearModal}
-                        onClose={() => setShowSecondClearModal(false)}
-                        title="Confirm"
-                        footer={
-                            <>
-                                <button onClick={() => setShowSecondClearModal(false)} className="px-4 py-2 text-sm text-slate-400 hover:text-white">Cancel</button>
-                                <button onClick={handleSecondClearConfirm} className="px-4 py-2 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg font-semibold">Confirm</button>
-                            </>
-                        }
-                    >
-                        <p className="text-slate-300">Are you sure you want to clear your inventory manager?</p>
-                    </Modal>
+        const handleUpdateInventoryConfirm = async () => {
+          setShowUpdateConfirmModal(false);
+          // Handle update logic here - simplified for now
+          alert("Update inventory - Full implementation needed");
+          setPendingUpdateData(null);
+        };
 
-                    <ExportFormatModal
-                        isOpen={showExportFormatModal}
-                        onClose={() => setShowExportFormatModal(false)}
-                        onSelectFormat={handleExportFormat}
+        // --- Resizer Logic ---
+        const handleMouseMove = useCallback(
+          (e) => {
+            if (!isResizing) return;
+            const newRatio = (e.clientX / window.innerWidth) * 100;
+            setSplitRatio(Math.min(80, Math.max(20, newRatio)));
+          },
+          [isResizing]
+        );
+
+        const handleMouseUp = useCallback(() => setIsResizing(false), []);
+        useEffect(() => {
+          if (isResizing) {
+            window.addEventListener("mousemove", handleMouseMove);
+            window.addEventListener("mouseup", handleMouseUp);
+          } else {
+            window.removeEventListener("mousemove", handleMouseMove);
+            window.removeEventListener("mouseup", handleMouseUp);
+          }
+          return () => {
+            window.removeEventListener("mousemove", handleMouseMove);
+            window.removeEventListener("mouseup", handleMouseUp);
+          };
+        }, [isResizing, handleMouseMove, handleMouseUp]);
+
+        // --- Render Logic ---
+        const leftItems = getListData(leftListId, searchQueryLeft);
+        const rightItems = getListData(rightListId, searchQueryRight);
+        const isSplitView = viewMode === "split";
+
+        // Initial Load / Import Screen
+        if (isLoadingFromDB) {
+          return (
+            <div className="flex h-screen items-center justify-center text-slate-400">
+              <RefreshCw className="w-6 h-6 animate-spin mr-2" /> Loading
+              Storage...
+            </div>
+          );
+        }
+
+        if (!data) {
+          return <FileUploader onDataLoaded={handleDataLoaded} />;
+        }
+
+        return (
+          <div className="flex flex-col h-screen w-full bg-slate-950 text-slate-100 font-sans overflow-hidden">
+            {/* Header - Adaptive */}
+            {!isSplitView && (
+              <div className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between shadow-xl shrink-0">
+                <h1 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Package className="text-blue-500" /> Inventory Manager
+                </h1>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setViewMode("split")}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                  >
+                    <Layout className="w-4 h-4" /> Split View
+                  </button>
+                  {data && (
+                    <FileMenu
+                      onSaveToDesktop={handleSaveToDesktop}
+                      onExportFor={handleExportFor}
+                      onClear={handleClear}
+                      onUpdateInventory={handleUpdateInventory}
                     />
+                  )}
+                </div>
+              </div>
+            )}
 
-                    <Modal
-                        isOpen={showUpdateConfirmModal}
-                        onClose={() => {
-                            setShowUpdateConfirmModal(false);
-                            setPendingUpdateData(null);
-                        }}
-                        title="Upload new extraction"
-                        footer={
-                            <>
-                                <button onClick={() => { setShowUpdateConfirmModal(false); setPendingUpdateData(null); }} className="px-4 py-2 text-sm text-slate-400 hover:text-white">Cancel</button>
-                                <button onClick={handleUpdateInventoryConfirm} className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold">Confirm</button>
-                            </>
-                        }
-                    >
-                        <p className="text-slate-300">This will update quantities for existing items and/or add any new or missing items.</p>
-                    </Modal>
-
-                    <Modal
-                        isOpen={showSaveToDesktopModal}
-                        onClose={() => setShowSaveToDesktopModal(false)}
-                        title="Save to Desktop"
-                        footer={
-                            <>
-                                <button onClick={() => setShowSaveToDesktopModal(false)} className="px-4 py-2 text-sm text-slate-400 hover:text-white">Cancel</button>
-                                <button onClick={handleSaveToDesktopConfirm} className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold">Save</button>
-                            </>
-                        }
-                    >
-                        <p className="text-slate-300">This will save a local copy of your inventory to your desktop, which you can share or re-open to view</p>
-                    </Modal>
-
-                    {/* Hidden file input for update inventory */}
+            {/* Main Content Area */}
+            <div className="flex-1 flex overflow-hidden relative">
+              {/* Left Panel */}
+              <div
+                className="flex flex-col flex-1 min-w-0"
+                style={{ flexBasis: isSplitView ? `${splitRatio}%` : "100%" }}
+              >
+                <PanelHeader
+                  side="left"
+                  lists={sublists}
+                  selectedListId={leftListId}
+                  onSelect={setLeftListId}
+                  onCreateList={() => setModalState({ type: "create" })}
+                  itemCount={leftItems.length}
+                />
+                {/* Search Left */}
+                <div className="p-2 bg-slate-900/50 border-b border-slate-800">
+                  <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                     <input
-                        ref={updateInventoryInputRef}
-                        type="file"
-                        style={{ display: 'none' }}
-                        webkitdirectory=""
-                        directory=""
-                        onChange={handleUpdateInventoryFileSelect}
+                      type="text"
+                      placeholder="Search..."
+                      value={searchQueryLeft}
+                      onChange={(e) => setSearchQueryLeft(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
                     />
-
-                    {isExporting && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
-                            <div className="bg-slate-900 border border-slate-700 rounded-xl p-8 max-w-sm w-full mx-4 shadow-2xl flex flex-col items-center">
-                                <RefreshCw className="w-12 h-12 text-blue-500 animate-spin mb-4" />
-                                <p className="text-slate-200 text-lg font-medium">Exporting...</p>
-                                <p className="text-slate-400 text-sm mt-2">Please wait...</p>
-                            </div>
-                        </div>
-                    )}
+                  </div>
                 </div>
-            );
-        };
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+                {/* Header Row */}
+                <div className="flex items-center bg-slate-900/80 backdrop-blur border-b border-slate-800 px-4 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider shrink-0 select-none">
+                  <div className="w-8">#</div>
+                  <div className="w-16 mr-3">Img</div>
+                  <div className="flex-1">Details</div>
+                  <div className="w-24 px-2 text-right">Qty</div>
+                  {!isSplitView && (
+                    <>
+                      <div className="w-24 px-2 text-right">Price</div>
+                      <div className="w-28 px-2">Rarity</div>
+                    </>
+                  )}
+                </div>
+
+                <VirtualList
+                  items={leftItems}
+                  imageMap={imageMap}
+                  onUpdateItem={handleUpdateItem}
+                  viewMode={
+                    isSplitView
+                      ? "split"
+                      : leftListId !== "all"
+                      ? "sublist"
+                      : "default"
+                  }
+                  activePanel="left"
+                  allocations={allocations}
+                  onContextMenuOpen={(item, pos) =>
+                    onContextMenuOpen(item, pos, "left")
+                  }
+                  contextMenu={contextMenu}
+                />
+              </div>
+
+              {/* Divider & Right Panel (Split View Only) */}
+              {isSplitView && (
+                <>
+                  <div
+                    className="resizer"
+                    onMouseDown={() => setIsResizing(true)}
+                  ></div>
+                  <div
+                    className="flex flex-col min-w-0 border-l border-slate-800"
+                    style={{ flexBasis: `${100 - splitRatio}%` }}
+                  >
+                    <PanelHeader
+                      side="right"
+                      lists={sublists}
+                      selectedListId={rightListId}
+                      onSelect={setRightListId}
+                      isSplitView={true}
+                      onSwap={() => {
+                        const temp = leftListId;
+                        setLeftListId(rightListId);
+                        setRightListId(temp);
+                      }}
+                      onCloseSplit={() => setViewMode("default")}
+                      itemCount={rightItems.length}
+                    />
+                    {/* Search Right */}
+                    <div className="p-2 bg-slate-900/50 border-b border-slate-800">
+                      <div className="relative">
+                        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                        <input
+                          type="text"
+                          placeholder="Search..."
+                          value={searchQueryRight}
+                          onChange={(e) => setSearchQueryRight(e.target.value)}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Header Row Right */}
+                    <div className="flex items-center bg-slate-900/80 backdrop-blur border-b border-slate-800 px-4 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider shrink-0 select-none">
+                      <div className="w-8">#</div>
+                      <div className="w-16 mr-3">Img</div>
+                      <div className="flex-1">Details</div>
+                      <div className="w-24 px-2 text-right">Qty</div>
+                    </div>
+
+                    <VirtualList
+                      items={rightItems}
+                      imageMap={imageMap}
+                      onUpdateItem={handleUpdateItem}
+                      viewMode="split"
+                      activePanel="right"
+                      allocations={allocations}
+                      onContextMenuOpen={(item, pos) =>
+                        onContextMenuOpen(item, pos, "right")
+                      }
+                      contextMenu={contextMenu}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Modals & Context Menu */}
+            <CreateListModal
+              isOpen={modalState.type === "create"}
+              onClose={() => setModalState({ type: null })}
+              onCreate={handleCreateList}
+            />
+
+            {modalState.type === "qty" && (
+              <QuantityModal
+                isOpen={true}
+                onClose={() => setModalState({ type: null })}
+                itemName={modalState.data.item.name}
+                maxQuantity={modalState.data.max}
+                onConfirm={(qty) => {
+                  handleAddItemToList(
+                    modalState.data.listId,
+                    modalState.data.item,
+                    qty
+                  );
+                  setModalState({ type: null });
+                }}
+              />
+            )}
+
+            {contextMenu && (
+              <div
+                className="fixed z-[100] bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 min-w-[200px]"
+                style={{
+                  top: Math.min(
+                    contextMenu.position.y,
+                    window.innerHeight - 150
+                  ),
+                  left: Math.min(
+                    contextMenu.position.x,
+                    window.innerWidth - 200
+                  ),
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setContextMenu(null);
+                }}
+              >
+                {/* Actions Logic */}
+                {contextMenu.panel === "left" &&
+                  isSplitView &&
+                  rightListId !== "all" && (
+                    <>
+                      <button
+                        onClick={() => handleContextMenuAction("add")}
+                        className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
+                      >
+                        Add to "
+                        {sublists.find((l) => l.id === rightListId)?.name}"
+                      </button>
+                      <div className="h-px bg-slate-700 my-1"></div>
+                    </>
+                  )}
+                {contextMenu.panel === "right" &&
+                  isSplitView &&
+                  rightListId !== "all" && (
+                    <button
+                      onClick={() => handleContextMenuAction("remove")}
+                      className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-slate-700 transition-colors"
+                    >
+                      Remove from{" "}
+                      {sublists.find((l) => l.id === rightListId)?.name}
+                    </button>
+                  )}
+
+                {/* Generic Actions */}
+                <button className="w-full text-left px-4 py-2 text-sm text-slate-400 hover:bg-slate-700 transition-colors">
+                  View Details
+                </button>
+              </div>
+            )}
+
+            {/* Export/Import Modals */}
+            <Modal
+              isOpen={showFirstClearModal}
+              onClose={() => setShowFirstClearModal(false)}
+              title="Delete Inventory?"
+              footer={
+                <>
+                  <button
+                    onClick={() => setShowFirstClearModal(false)}
+                    className="px-4 py-2 text-sm text-slate-400 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleFirstClearConfirm}
+                    className="px-4 py-2 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg font-semibold"
+                  >
+                    Next
+                  </button>
+                </>
+              }
+            >
+              <p className="text-slate-300">
+                This will clear your inventory manager. Make sure you have
+                already saved a copy to your Desktop.
+              </p>
+            </Modal>
+
+            <Modal
+              isOpen={showSecondClearModal}
+              onClose={() => setShowSecondClearModal(false)}
+              title="Confirm"
+              footer={
+                <>
+                  <button
+                    onClick={() => setShowSecondClearModal(false)}
+                    className="px-4 py-2 text-sm text-slate-400 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSecondClearConfirm}
+                    className="px-4 py-2 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg font-semibold"
+                  >
+                    Confirm
+                  </button>
+                </>
+              }
+            >
+              <p className="text-slate-300">
+                Are you sure you want to clear your inventory manager?
+              </p>
+            </Modal>
+
+            <ExportFormatModal
+              isOpen={showExportFormatModal}
+              onClose={() => setShowExportFormatModal(false)}
+              onSelectFormat={handleExportFormat}
+            />
+
+            <Modal
+              isOpen={showUpdateConfirmModal}
+              onClose={() => {
+                setShowUpdateConfirmModal(false);
+                setPendingUpdateData(null);
+              }}
+              title="Upload new extraction"
+              footer={
+                <>
+                  <button
+                    onClick={() => {
+                      setShowUpdateConfirmModal(false);
+                      setPendingUpdateData(null);
+                    }}
+                    className="px-4 py-2 text-sm text-slate-400 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUpdateInventoryConfirm}
+                    className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold"
+                  >
+                    Confirm
+                  </button>
+                </>
+              }
+            >
+              <p className="text-slate-300">
+                This will update quantities for existing items and/or add any
+                new or missing items.
+              </p>
+            </Modal>
+
+            <Modal
+              isOpen={showSaveToDesktopModal}
+              onClose={() => setShowSaveToDesktopModal(false)}
+              title="Save to Desktop"
+              footer={
+                <>
+                  <button
+                    onClick={() => setShowSaveToDesktopModal(false)}
+                    className="px-4 py-2 text-sm text-slate-400 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveToDesktopConfirm}
+                    className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold"
+                  >
+                    Save
+                  </button>
+                </>
+              }
+            >
+              <p className="text-slate-300">
+                This will save a local copy of your inventory to your desktop,
+                which you can share or re-open to view
+              </p>
+            </Modal>
+
+            {/* Hidden file input for update inventory */}
+            <input
+              ref={updateInventoryInputRef}
+              type="file"
+              style={{ display: "none" }}
+              webkitdirectory=""
+              directory=""
+              onChange={handleUpdateInventoryFileSelect}
+            />
+
+            {isExporting && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+                <div className="bg-slate-900 border border-slate-700 rounded-xl p-8 max-w-sm w-full mx-4 shadow-2xl flex flex-col items-center">
+                  <RefreshCw className="w-12 h-12 text-blue-500 animate-spin mb-4" />
+                  <p className="text-slate-200 text-lg font-medium">
+                    Exporting...
+                  </p>
+                  <p className="text-slate-400 text-sm mt-2">Please wait...</p>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
     </script>
-</body>
+  </body>
 </html>
