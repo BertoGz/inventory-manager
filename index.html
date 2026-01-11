@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
+<head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Inventory Manager</title>
-
+    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-
+    
     <!-- React & ReactDOM -->
     <script
       crossorigin
@@ -17,10 +17,10 @@
       crossorigin
       src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
     ></script>
-
+    
     <!-- Babel for in-browser JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
+    
     <!-- JSZip for ZIP export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
@@ -32,7 +32,7 @@
 
     <!-- jsPDF for PDF export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
+    
     <!-- sql.js for SQLite database creation -->
     <script src="https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/sql-wasm.js"></script>
 
@@ -42,55 +42,55 @@
         pipeline,
         env,
       } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.16.0";
-
-      // Skip local model checks since we are in a browser without a file system
-      env.allowLocalModels = false;
-
-      // Attach to window so our React app can use it
-      window.pipeline = pipeline;
-      window.transformersLoaded = true;
+        
+        // Skip local model checks since we are in a browser without a file system
+        env.allowLocalModels = false;
+        
+        // Attach to window so our React app can use it
+        window.pipeline = pipeline;
+        window.transformersLoaded = true;
     </script>
 
     <style>
-      /* Custom Scrollbar */
-      ::-webkit-scrollbar {
-        width: 10px;
-        height: 10px;
-      }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
 
-      ::-webkit-scrollbar-track {
-        background: #0f172a;
-      }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
 
-      ::-webkit-scrollbar-thumb {
-        background: #334155;
-        border-radius: 5px;
-        border: 2px solid #0f172a;
-      }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 5px;
+            border: 2px solid #0f172a;
+        }
 
-      ::-webkit-scrollbar-thumb:hover {
-        background: #475569;
-      }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
 
       input[type="number"]::-webkit-inner-spin-button,
       input[type="number"]::-webkit-outer-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-      }
-
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        
       .animate-pulse-subtle {
         animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
       }
 
-      @keyframes pulse-subtle {
-        0%,
-        100% {
-          opacity: 1;
+        @keyframes pulse-subtle {
+            0%,
+            100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.7;
+            }
         }
-        50% {
-          opacity: 0.7;
-        }
-      }
 
       /* Resizer handle */
       .resizer {
@@ -112,18 +112,18 @@
         color: #64748b;
         font-size: 12px;
         line-height: 8px;
-      }
+        }
     </style>
-  </head>
+</head>
 
-  <body class="bg-slate-950 text-slate-100 overflow-hidden">
+<body class="bg-slate-950 text-slate-100 overflow-hidden">
     <div id="root"></div>
 
     <script type="text/babel">
-      const { useState, useEffect, useRef, useMemo, useCallback } = React;
+        const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
-      // --- Icons ---
-      const IconBase = ({ children, className }) => (
+        // --- Icons ---
+        const IconBase = ({ children, className }) => (
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="24"
@@ -136,76 +136,76 @@
           strokeLinejoin="round"
           className={className}
         >
-          {children}
-        </svg>
-      );
+                {children}
+            </svg>
+        );
 
-      const FolderOpen = (props) => (
+        const FolderOpen = (props) => (
         <IconBase {...props}>
           <path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-3.25 7a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" />
         </IconBase>
-      );
-      const Package = (props) => (
+        );
+        const Package = (props) => (
         <IconBase {...props}>
           <path d="m7.5 4.27 9 5.15" />
           <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
           <path d="m3.3 7 8.7 5 8.7-5" />
           <path d="M12 22v-9" />
         </IconBase>
-      );
-      const Save = (props) => (
+        );
+        const Save = (props) => (
         <IconBase {...props}>
           <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
           <polyline points="17 21 17 13 7 13 7 21" />
           <polyline points="7 3 7 8 15 8" />
         </IconBase>
-      );
-      const AlertCircle = (props) => (
+        );
+        const AlertCircle = (props) => (
         <IconBase {...props}>
           <circle cx="12" cy="12" r="10" />
           <line x1="12" x2="12" y1="8" y2="12" />
           <line x1="12" x2="12.01" y1="16" y2="16" />
         </IconBase>
-      );
-      const ImageIcon = (props) => (
+        );
+        const ImageIcon = (props) => (
         <IconBase {...props}>
           <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
           <circle cx="9" cy="9" r="2" />
           <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
         </IconBase>
-      );
-      const RefreshCw = (props) => (
+        );
+        const RefreshCw = (props) => (
         <IconBase {...props}>
           <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
           <path d="M21 3v5h-5" />
           <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
           <path d="M8 16H3v5" />
         </IconBase>
-      );
-      const Search = (props) => (
+        );
+        const Search = (props) => (
         <IconBase {...props}>
           <circle cx="11" cy="11" r="8" />
           <path d="m21 21-4.3-4.3" />
         </IconBase>
-      );
-      const Brain = (props) => (
+        );
+        const Brain = (props) => (
         <IconBase {...props}>
           <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z" />
           <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z" />
         </IconBase>
-      );
-      const X = (props) => (
+        );
+        const X = (props) => (
         <IconBase {...props}>
           <path d="M18 6 6 18" />
           <path d="m6 6 12 12" />
         </IconBase>
-      );
-      const ChevronDown = (props) => (
+        );
+        const ChevronDown = (props) => (
         <IconBase {...props}>
           <path d="m6 9 6 6 6-6" />
         </IconBase>
-      );
-      const FileText = (props) => (
+        );
+        const FileText = (props) => (
         <IconBase {...props}>
           <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
           <polyline points="14 2 14 8 20 8" />
@@ -248,14 +248,14 @@
         <IconBase {...props}>
           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
         </IconBase>
-      );
+        );
 
-      // --- Constants & Helpers ---
+        // --- Constants & Helpers ---
 
-      const ROW_HEIGHT = 80;
-      const BUFFER_ITEMS = 5;
+        const ROW_HEIGHT = 80; 
+        const BUFFER_ITEMS = 5; 
 
-      const RARITY_MAP = {
+        const RARITY_MAP = {
         0: {
           label: "Common",
           color: "text-gray-400 border-gray-600 bg-gray-800",
@@ -268,20 +268,20 @@
           label: "Ultra Rare",
           color: "text-purple-400 border-purple-600 bg-purple-900/20",
         },
-      };
+        };
 
-      function cosineSimilarity(a, b) {
-        let dot = 0;
-        for (let i = 0; i < a.length; i++) {
-          dot += a[i] * b[i];
-        }
+        function cosineSimilarity(a, b) {
+            let dot = 0;
+            for (let i = 0; i < a.length; i++) {
+                dot += a[i] * b[i];
+            }
         let magA = 0,
           magB = 0;
-        for (let i = 0; i < a.length; i++) magA += a[i] * a[i];
-        for (let i = 0; i < b.length; i++) magB += b[i] * b[i];
-
-        return dot / (Math.sqrt(magA) * Math.sqrt(magB));
-      }
+            for (let i = 0; i < a.length; i++) magA += a[i] * a[i];
+            for (let i = 0; i < b.length; i++) magB += b[i] * b[i];
+            
+            return dot / (Math.sqrt(magA) * Math.sqrt(magB));
+        }
 
       function generateUUID() {
         return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
@@ -292,9 +292,9 @@
             return v.toString(16);
           }
         );
-      }
+        }
 
-      // --- IndexedDB Helpers ---
+        // --- IndexedDB Helpers ---
       const DB_NAME = "vmkInventoryDB";
       const DB_VERSION = 5; // Bumped version for sublists
       const STORE_ITEMS = "items";
@@ -303,83 +303,83 @@
       const STORE_EMBEDDINGS = "embeddings";
       const STORE_SUBLISTS = "sublists";
 
-      function openDB() {
-        return new Promise((resolve, reject) => {
-          const request = indexedDB.open(DB_NAME, DB_VERSION);
-          request.onerror = () => reject(request.error);
-          request.onsuccess = () => resolve(request.result);
-          request.onupgradeneeded = (event) => {
-            const db = event.target.result;
-
-            if (event.oldVersion < 4) {
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve(request.result);
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    
+                    if (event.oldVersion < 4) {
               if (db.objectStoreNames.contains(STORE_ITEMS))
-                db.deleteObjectStore(STORE_ITEMS);
+                            db.deleteObjectStore(STORE_ITEMS);
               if (db.objectStoreNames.contains(STORE_EMBEDDINGS))
-                db.deleteObjectStore(STORE_EMBEDDINGS);
-            }
-
-            if (!db.objectStoreNames.contains(STORE_ITEMS)) {
+                            db.deleteObjectStore(STORE_EMBEDDINGS);
+                    }
+                    
+                    if (!db.objectStoreNames.contains(STORE_ITEMS)) {
               db.createObjectStore(STORE_ITEMS, { keyPath: "type" });
-            }
-            if (!db.objectStoreNames.contains(STORE_IMAGES)) {
+                    }
+                    if (!db.objectStoreNames.contains(STORE_IMAGES)) {
               db.createObjectStore(STORE_IMAGES, { keyPath: "filename" });
-            }
-            if (!db.objectStoreNames.contains(STORE_METADATA)) {
+                    }
+                    if (!db.objectStoreNames.contains(STORE_METADATA)) {
               db.createObjectStore(STORE_METADATA, { keyPath: "key" });
-            }
-            if (!db.objectStoreNames.contains(STORE_EMBEDDINGS)) {
+                    }
+                    if (!db.objectStoreNames.contains(STORE_EMBEDDINGS)) {
               db.createObjectStore(STORE_EMBEDDINGS, { keyPath: "type" });
             }
             // Version 5: Sublists
             if (!db.objectStoreNames.contains(STORE_SUBLISTS)) {
               db.createObjectStore(STORE_SUBLISTS, { keyPath: "id" });
-            }
-          };
-        });
-      }
+                    }
+                };
+            });
+        }
 
       async function saveImagesToIndexedDB(
         imageFileMap,
         existingImageMap = null
       ) {
-        try {
-          const db = await openDB();
+            try {
+                const db = await openDB();
           const tx = db.transaction([STORE_IMAGES], "readwrite");
-          const imagesStore = tx.objectStore(STORE_IMAGES);
-          for (const [filename, fileObj] of imageFileMap.entries()) {
-            if (!existingImageMap || !existingImageMap.has(filename)) {
-              imagesStore.put({ filename, blob: fileObj });
-            }
-          }
-          await new Promise((resolve, reject) => {
+                const imagesStore = tx.objectStore(STORE_IMAGES);
+                for (const [filename, fileObj] of imageFileMap.entries()) {
+                    if (!existingImageMap || !existingImageMap.has(filename)) {
+                        imagesStore.put({ filename, blob: fileObj });
+                    }
+                }
+                await new Promise((resolve, reject) => {
             tx.oncomplete = () => resolve();
-            tx.onerror = () => reject(tx.error);
-          });
-        } catch (e) {
-          console.error("Failed to save images:", e);
-          throw e;
+                    tx.onerror = () => reject(tx.error);
+                });
+            } catch (e) {
+                console.error("Failed to save images:", e);
+                throw e;
+            }
         }
-      }
 
       async function saveDataToIndexedDB(items, metadata, sublists = null) {
         try {
           if (!items || items.length === 0) return;
-          const db = await openDB();
+                const db = await openDB();
           const stores = [STORE_ITEMS, STORE_METADATA];
           if (sublists) stores.push(STORE_SUBLISTS);
-
+                
           const tx = db.transaction(stores, "readwrite");
-          const itemsStore = tx.objectStore(STORE_ITEMS);
-
+                const itemsStore = tx.objectStore(STORE_ITEMS);
+                
           items.forEach((item) => {
-            try {
-              itemsStore.put(item);
-            } catch (err) {
-              console.error("Error putting item:", item, err);
-            }
-          });
+                    try {
+                        itemsStore.put(item);
+                    } catch (err) {
+                        console.error("Error putting item:", item, err);
+                    }
+                });
 
-          if (metadata) {
+                if (metadata) {
             tx.objectStore(STORE_METADATA).put({
               key: "extraction",
               ...metadata,
@@ -389,17 +389,17 @@
           if (sublists) {
             const sublistStore = tx.objectStore(STORE_SUBLISTS);
             sublists.forEach((list) => sublistStore.put(list));
-          }
+                }
 
-          await new Promise((resolve, reject) => {
+                await new Promise((resolve, reject) => {
             tx.oncomplete = () => resolve();
-            tx.onerror = () => reject(tx.error);
-          });
-        } catch (e) {
-          console.error("Failed to save data:", e);
-          throw e;
+                    tx.onerror = () => reject(tx.error);
+                });
+            } catch (e) {
+                console.error("Failed to save data:", e);
+                throw e;
+            }
         }
-      }
 
       async function saveSublistToDB(sublist) {
         try {
@@ -415,46 +415,46 @@
         }
       }
 
-      async function saveEmbeddingsToIndexedDB(embeddingsMap) {
-        try {
-          if (!embeddingsMap || embeddingsMap.size === 0) return;
-          const db = await openDB();
+        async function saveEmbeddingsToIndexedDB(embeddingsMap) {
+            try {
+                if (!embeddingsMap || embeddingsMap.size === 0) return;
+                const db = await openDB();
           const tx = db.transaction([STORE_EMBEDDINGS], "readwrite");
-          const embeddingsStore = tx.objectStore(STORE_EMBEDDINGS);
-          for (const [itemType, vector] of embeddingsMap.entries()) {
-            embeddingsStore.put({ type: itemType, vector: Array.from(vector) });
-          }
-          await new Promise((resolve, reject) => {
+                const embeddingsStore = tx.objectStore(STORE_EMBEDDINGS);
+                for (const [itemType, vector] of embeddingsMap.entries()) {
+                        embeddingsStore.put({ type: itemType, vector: Array.from(vector) });
+                    }
+                await new Promise((resolve, reject) => {
             tx.oncomplete = () => resolve();
-            tx.onerror = () => reject(tx.error);
-          });
-        } catch (e) {
-          console.error("Failed to save embeddings:", e);
-          throw e;
+                    tx.onerror = () => reject(tx.error);
+                });
+            } catch (e) {
+                console.error("Failed to save embeddings:", e);
+                throw e;
+            }
         }
-      }
 
-      async function loadEmbeddingsFromIndexedDB() {
-        try {
-          const db = await openDB();
+        async function loadEmbeddingsFromIndexedDB() {
+            try {
+                const db = await openDB();
           const tx = db.transaction([STORE_EMBEDDINGS], "readonly");
-          const embeddingsRecords = await new Promise((resolve, reject) => {
+                const embeddingsRecords = await new Promise((resolve, reject) => {
             const req = tx.objectStore(STORE_EMBEDDINGS).getAll();
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(req.error);
-          });
-          const embeddingsMap = new Map();
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+                const embeddingsMap = new Map();
           for (const record of embeddingsRecords)
-            embeddingsMap.set(record.type, record.vector);
-          return embeddingsMap;
-        } catch (e) {
-          return new Map();
+                    embeddingsMap.set(record.type, record.vector);
+                return embeddingsMap;
+            } catch (e) {
+                return new Map();
+            }
         }
-      }
 
-      async function loadFromIndexedDB() {
-        try {
-          const db = await openDB();
+        async function loadFromIndexedDB() {
+            try {
+                const db = await openDB();
           const tx = db.transaction(
             [
               STORE_ITEMS,
@@ -487,9 +487,9 @@
             r.onerror = () => rej(r.error);
           });
 
-          const imageMap = new Map();
+                const imageMap = new Map();
           for (const record of imageRecords)
-            imageMap.set(record.filename, URL.createObjectURL(record.blob));
+                    imageMap.set(record.filename, URL.createObjectURL(record.blob));
 
           const metadata = metadataRecord
             ? { timestamp: metadataRecord.timestamp, Date: metadataRecord.Date }
@@ -500,12 +500,12 @@
             r.onsuccess = () => res(r.result);
             r.onerror = () => rej(r.error);
           });
-          const embeddingsMap = new Map();
+                const embeddingsMap = new Map();
           for (const record of embeddingsRecords)
-            embeddingsMap.set(record.type, record.vector);
+                    embeddingsMap.set(record.type, record.vector);
 
           return { items, imageMap, metadata, embeddingsMap, sublists };
-        } catch (e) {
+            } catch (e) {
           console.error("Error loading from IndexedDB:", e);
           return {
             items: [],
@@ -514,12 +514,12 @@
             embeddingsMap: new Map(),
             sublists: [],
           };
+            }
         }
-      }
 
-      async function clearIndexedDB() {
-        try {
-          const db = await openDB();
+        async function clearIndexedDB() {
+            try {
+                const db = await openDB();
           const tx = db.transaction(
             [
               STORE_ITEMS,
@@ -530,85 +530,85 @@
             ],
             "readwrite"
           );
-          await tx.objectStore(STORE_ITEMS).clear();
-          await tx.objectStore(STORE_IMAGES).clear();
-          await tx.objectStore(STORE_METADATA).clear();
-          await tx.objectStore(STORE_EMBEDDINGS).clear();
+                await tx.objectStore(STORE_ITEMS).clear();
+                await tx.objectStore(STORE_IMAGES).clear();
+                await tx.objectStore(STORE_METADATA).clear();
+                await tx.objectStore(STORE_EMBEDDINGS).clear();
           await tx.objectStore(STORE_SUBLISTS).clear();
-          await new Promise((resolve, reject) => {
-            tx.oncomplete = () => resolve();
-            tx.onerror = () => reject(tx.error);
-          });
-        } catch (e) {
+                await new Promise((resolve, reject) => {
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+            } catch (e) {
           console.error("Error clearing IndexedDB:", e);
+            }
         }
-      }
 
-      async function getImagesFromIndexedDB() {
-        try {
-          const db = await openDB();
+        async function getImagesFromIndexedDB() {
+            try {
+                const db = await openDB();
           const tx = db.transaction([STORE_IMAGES], "readonly");
           const imageRecords = await new Promise((res, rej) => {
             const r = tx.objectStore(STORE_IMAGES).getAll();
             r.onsuccess = () => res(r.result);
             r.onerror = () => rej(r.error);
           });
-          const imageMap = new Map();
+                const imageMap = new Map();
           for (const record of imageRecords)
-            imageMap.set(record.filename, record.blob);
-          return imageMap;
-        } catch (e) {
-          return new Map();
+                    imageMap.set(record.filename, record.blob);
+                return imageMap;
+            } catch (e) {
+                return new Map();
+            }
         }
-      }
 
-      // --- Components ---
+        // --- Components ---
 
       const FileUploader = ({ onDataLoaded }) => {
-        const [loading, setLoading] = useState(false);
-        const [error, setError] = useState(null);
-        const folderInputRef = useRef(null);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+            const folderInputRef = useRef(null);
 
-        useEffect(() => {
-          if (folderInputRef.current) {
-            folderInputRef.current.setAttribute("webkitdirectory", "");
-            folderInputRef.current.setAttribute("directory", "");
-          }
-        }, []);
+            useEffect(() => {
+                if (folderInputRef.current) {
+                    folderInputRef.current.setAttribute("webkitdirectory", "");
+                    folderInputRef.current.setAttribute("directory", "");
+                }
+            }, []);
 
-        const readFileAsText = (file) => {
-          return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (event) => resolve(event.target.result);
-            reader.onerror = (error) => reject(error);
-            reader.readAsText(file);
-          });
-        };
+            const readFileAsText = (file) => {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (event) => resolve(event.target.result);
+                    reader.onerror = (error) => reject(error);
+                    reader.readAsText(file);
+                });
+            };
 
-        const parseAndEnrichData = (rawText) => {
-          let text = rawText.trim();
+            const parseAndEnrichData = (rawText) => {
+                let text = rawText.trim();
           if (text.endsWith(",") || text.endsWith(",]"))
             text = text.replace(/,(\s*\]?)$/, "$1");
-
-          let json;
-          try {
-            json = JSON.parse(text);
-          } catch (e) {
-            try {
-              json = JSON.parse(`[${text}]`);
-            } catch (e2) {
+                
+                let json;
+                try {
+                    json = JSON.parse(text);
+                } catch (e) {
+                    try {
+                        json = JSON.parse(`[${text}]`);
+                    } catch (e2) {
               throw new Error("Failed to parse JSON.");
-            }
-          }
-
+                    }
+                }
+                
           let dataArray = [];
-          let metadata = null;
+                let metadata = null;
 
           if (json.data && Array.isArray(json.data)) {
             dataArray = json.data;
             metadata = { timestamp: json.timestamp, Date: json.Date };
-          } else if (Array.isArray(json)) {
-            dataArray = json;
+                } else if (Array.isArray(json)) {
+                    dataArray = json;
           } else if (typeof json === "object") {
             // Try to extract root object if wrapped weirdly
             if (json.data) dataArray = json.data;
@@ -619,14 +619,14 @@
             throw new Error("Invalid data format.");
 
           const enriched = dataArray.map((item, idx) => ({
-            type: item.type || item.id || `temp-${idx}`,
+                    type: item.type || item.id || `temp-${idx}`, 
             id: item.id || `temp-${idx}`,
-            ...item,
-            name: item.name || "Unknown Item",
-            image: item.image || "",
+                    ...item,
+                    name: item.name || "Unknown Item",
+                    image: item.image || "",
             quantity:
               item.count !== undefined ? item.count : item.quantity || 0,
-            price: item.price !== undefined ? item.price : 0,
+                    price: item.price !== undefined ? item.price : 0,
             rarity: item.rarity !== undefined ? item.rarity : 0,
           }));
 
@@ -661,11 +661,11 @@
             const { data, metadata } = parseAndEnrichData(text);
 
             await onDataLoaded(data, urlMap, metadata, fileMap);
-          } catch (err) {
-            console.error(err);
-            setError(err.message);
-          } finally {
-            setLoading(false);
+                } catch (err) {
+                    console.error(err);
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
           }
         };
 
@@ -686,35 +686,35 @@
 
             // Load Items
             const itemsRes = db.exec("SELECT * FROM items");
-            const items = [];
+                const items = [];
             if (itemsRes.length > 0) {
               const cols = itemsRes[0].columns;
               itemsRes[0].values.forEach((row) => {
-                const item = {};
+                    const item = {};
                 cols.forEach((col, i) => {
                   if (col === "data") {
-                    try {
+                            try {
                       Object.assign(item, JSON.parse(row[i]));
-                    } catch (e) {
+                            } catch (e) {
                       item[col] = row[i];
-                    }
-                  } else {
+                            }
+                        } else {
                     item[col] = row[i];
-                  }
-                });
-                items.push(item);
+                        }
+                    });
+                    items.push(item);
               });
-            }
+                }
 
             // Load Images
             const imgRes = db.exec("SELECT filename, data FROM images");
-            const fileMap = new Map();
+                const fileMap = new Map();
             const urlMap = new Map();
             if (imgRes.length > 0) {
               imgRes[0].values.forEach((row) => {
                 const filename = row[0];
                 const blobData = row[1];
-                if (blobData) {
+                        if (blobData) {
                   const blob = new Blob(
                     [
                       blobData instanceof Uint8Array
@@ -723,7 +723,7 @@
                     ],
                     { type: "image/png" }
                   ); // Defaulting type
-                  fileMap.set(filename, blob);
+                                fileMap.set(filename, blob);
                   urlMap.set(filename, URL.createObjectURL(blob));
                 }
               });
@@ -739,7 +739,7 @@
             }
 
             // Load Metadata
-            let metadata = null;
+                let metadata = null;
             try {
               const metaRes = db.exec(
                 "SELECT value FROM metadata WHERE key='date'"
@@ -748,19 +748,19 @@
                 metadata = { Date: metaRes[0].values[0][0] };
             } catch (e) {
               /* ignore */
-            }
+                }
 
-            db.close();
+                db.close();
 
             // Enrich items
             const enriched = items.map((item, idx) => ({
-              type: item.type || item.id || `temp-${idx}`,
-              id: item.id || `temp-${idx}`,
-              ...item,
-              name: item.name || "Unknown Item",
-              image: item.image || "",
-              quantity: item.quantity || 0,
-              price: item.price || 0,
+                    type: item.type || item.id || `temp-${idx}`,
+                    id: item.id || `temp-${idx}`,
+                    ...item,
+                    name: item.name || "Unknown Item",
+                    image: item.image || "",
+                    quantity: item.quantity || 0,
+                    price: item.price || 0,
               rarity: item.rarity !== undefined ? item.rarity : 0,
             }));
 
@@ -771,29 +771,29 @@
           } finally {
             setLoading(false);
           }
-        };
+            };
 
-        return (
+            return (
           <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in duration-700">
-            <div className="bg-slate-900/50 p-10 rounded-2xl border border-slate-800 shadow-2xl max-w-4xl w-full backdrop-blur-sm">
-              <h1 className="text-3xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
-                Import Inventory
-              </h1>
+                    <div className="bg-slate-900/50 p-10 rounded-2xl border border-slate-800 shadow-2xl max-w-4xl w-full backdrop-blur-sm">
+                        <h1 className="text-3xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+                            Import Inventory
+                        </h1>
               <p className="text-slate-400 mb-8">
-                Choose how you want to import your inventory data.
-              </p>
+                            Choose how you want to import your inventory data.
+                        </p>
 
-              {loading ? (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <RefreshCw className="w-12 h-12 text-blue-500 animate-spin mb-4" />
-                  <span className="text-slate-300">Processing Data...</span>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {loading ? (
+                            <div className="flex flex-col items-center justify-center py-12">
+                                <RefreshCw className="w-12 h-12 text-blue-500 animate-spin mb-4" />
+                                <span className="text-slate-300">Processing Data...</span>
+                                </div>
+                            ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <label className="relative group flex flex-col items-center justify-center px-6 py-8 bg-slate-800 hover:bg-slate-700/80 border border-slate-700 hover:border-blue-500/50 rounded-xl cursor-pointer transition-all hover:scale-[1.02] shadow-lg">
-                    <div className="bg-blue-500/10 p-4 rounded-full mb-4 group-hover:bg-blue-500/20 transition-colors">
-                      <FolderOpen className="w-8 h-8 text-blue-400" />
-                    </div>
+                                    <div className="bg-blue-500/10 p-4 rounded-full mb-4 group-hover:bg-blue-500/20 transition-colors">
+                                        <FolderOpen className="w-8 h-8 text-blue-400" />
+                                    </div>
                     <h3 className="text-lg font-semibold text-white mb-2">
                       Upload New Inventory
                     </h3>
@@ -801,45 +801,45 @@
                       Select folder containing{" "}
                       <code className="text-blue-300">furniture_data.txt</code>{" "}
                       and images.
-                    </p>
-                    <input
-                      ref={folderInputRef}
-                      type="file"
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      onChange={handleFolderSelect}
-                    />
-                  </label>
+                                    </p>
+                            <input 
+                                        ref={folderInputRef}
+                                type="file" 
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                onChange={handleFolderSelect}
+                            />
+                        </label>
 
                   <label className="relative group flex flex-col items-center justify-center px-6 py-8 bg-slate-800 hover:bg-slate-700/80 border border-slate-700 hover:border-emerald-500/50 rounded-xl cursor-pointer transition-all hover:scale-[1.02] shadow-lg">
-                    <div className="bg-emerald-500/10 p-4 rounded-full mb-4 group-hover:bg-emerald-500/20 transition-colors">
-                      <FileText className="w-8 h-8 text-emerald-400" />
-                    </div>
+                                    <div className="bg-emerald-500/10 p-4 rounded-full mb-4 group-hover:bg-emerald-500/20 transition-colors">
+                                        <FileText className="w-8 h-8 text-emerald-400" />
+                                    </div>
                     <h3 className="text-lg font-semibold text-white mb-2">
                       Import Existing File
                     </h3>
                     <p className="text-sm text-slate-400 text-center">
                       Import a <code className="text-emerald-300">.db</code>{" "}
                       file.
-                    </p>
-                    <input
-                      type="file"
-                      accept=".db"
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                    </p>
+                                    <input 
+                                        type="file" 
+                                        accept=".db"
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       onChange={handleDbSelect}
-                    />
-                  </label>
-                </div>
-              )}
-              {error && (
+                                    />
+                                </label>
+                            </div>
+                        )}
+                        {error && (
                 <div className="mt-6 p-4 bg-red-950/30 border border-red-900/50 text-red-200 rounded-lg text-sm flex items-start gap-3 text-left">
-                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-400" />
-                  <span>{error}</span>
+                                <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-400" />
+                                <span>{error}</span>
+                            </div>
+                        )}
+                    </div>
                 </div>
-              )}
-            </div>
-          </div>
-        );
-      };
+            );
+        };
 
       const Modal = ({ isOpen, onClose, title, children, footer }) => {
         if (!isOpen) return null;
@@ -1180,6 +1180,7 @@
           allocations,
           sublists,
           onTooltip,
+          currentListId,
         }) => {
           const imageUrl = imageMap.get(item.image);
           const rarityStyle = RARITY_MAP[item.rarity] || RARITY_MAP[0];
@@ -1242,51 +1243,63 @@
             e.preventDefault();
             e.stopPropagation();
             onContextMenuOpen(item, { x: e.clientX, y: e.clientY });
-          };
+            };
 
-          return (
-            <div
-              style={style}
+            return (
+                <div 
+                    style={style} 
               className={`absolute w-full flex items-center border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors px-4 group ${
                 isContextMenuOpen ? "bg-slate-800" : ""
               }`}
-              onContextMenu={handleContextMenu}
-            >
+                        onContextMenu={handleContextMenu}
+                >
               <div className="w-8 text-slate-600 text-xs font-mono flex-shrink-0">
                 {index + 1}
               </div>
 
               <div className="w-16 h-16 p-1 flex-shrink-0 mr-3">
                 <div className="w-full h-full rounded bg-slate-800/50 border border-slate-700/50 overflow-hidden relative">
-                  {imageUrl ? (
-                    <img
-                      src={imageUrl}
-                      alt={item.name}
+                            {imageUrl ? (
+                                <img 
+                                    src={imageUrl} 
+                                    alt={item.name} 
                       className="w-full h-full object-contain"
-                      loading="lazy"
-                    />
-                  ) : (
+                                    loading="lazy"
+                                />
+                            ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <ImageIcon className="w-4 h-4 opacity-40" />
+                                </div>
+                            )}
+                        </div>
                     </div>
-                  )}
-                </div>
-              </div>
 
               <div className="flex-1 min-w-0 item-name-area pr-2">
                 <div
                   className="font-medium text-slate-200 truncate text-sm"
                   title={item.name}
                 >
-                  {item.name}
-                </div>
+                            {item.name}
+                        </div>
                 <div className="text-[10px] text-slate-500 font-mono truncate">
                   {item.type}
-                </div>
-              </div>
+                        </div>
+                    </div>
 
               {/* Quantity Section */}
-              <div className="w-24 text-right px-2">
+              {(() => {
+                const currentList = currentListId && currentListId !== "all" 
+                  ? sublists.find(l => l.id === currentListId) 
+                  : null;
+                const isVirtualList = currentList && currentList.type === "virtual";
+                
+                // Hide quantity column entirely for virtual lists
+                if (isVirtualList && !isSplitView) {
+                  return null;
+                }
+                
+                return (
+                  <div className="w-24 text-right px-2">
                 {isSplitView && activePanel === "left" ? (
                   // Left Panel (Inventory): Show Available
                   <div className="flex flex-col items-end">
@@ -1315,73 +1328,132 @@
                     )}
                   </div>
                 ) : isSplitView && activePanel === "right" ? (
-                  // Right Panel (Sublist): Show Sublist Qty (Read Only)
-                  <span className="text-sm font-bold text-slate-300">
-                    {item.quantity}
-                  </span>
+                  // Right Panel (Sublist): Check if virtual list
+                  (() => {
+                    const currentList = currentListId && currentListId !== "all" 
+                      ? sublists.find(l => l.id === currentListId) 
+                      : null;
+                    const isVirtualList = currentList && currentList.type === "virtual";
+                    
+                    if (isVirtualList) {
+                      // Virtual list: Don't show quantity
+                      return <span className="text-sm font-bold text-slate-500">—</span>;
+                    }
+                    
+                    // Transfer list: Show quantity
+                    return (
+                      <span className="text-sm font-bold text-slate-300">
+                        {item.quantity}
+                      </span>
+                    );
+                  })()
                 ) : isSublistMode ? (
-                  // Fullscreen Sublist: Read Only
-                  <span className="text-sm font-bold text-slate-400 cursor-not-allowed">
-                    {item.quantity}
-                  </span>
+                  // Fullscreen Sublist: Check if virtual list
+                  (() => {
+                    const currentList = currentListId && currentListId !== "all" 
+                      ? sublists.find(l => l.id === currentListId) 
+                      : null;
+                    const isVirtualList = currentList && currentList.type === "virtual";
+                    
+                    if (isVirtualList) {
+                      // Virtual list: Don't show quantity
+                      return <span className="text-sm font-bold text-slate-500">—</span>;
+                    }
+                    
+                    // Transfer list: Show read-only quantity
+                    return (
+                      <span className="text-sm font-bold text-slate-400 cursor-not-allowed">
+                        {item.quantity}
+                      </span>
+                    );
+                  })()
                 ) : (
-                  // Default: Editable
-                  <div className="relative">
-                    <input
-                      type="number"
-                      className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm focus:border-blue-500 focus:outline-none text-right text-slate-200"
-                      value={item.quantity}
-                      min="0"
-                      onChange={(e) =>
-                        onUpdate(
-                          item.actualIndex,
-                          "quantity",
-                          parseInt(e.target.value) || 0
-                        )
-                      }
-                      onBlur={(e) =>
-                        onUpdate(
-                          item.actualIndex,
-                          "quantity",
-                          parseInt(e.target.value) || 0,
-                          true
-                        )
-                      }
-                    />
-                    {isAllocated && (
-                      <div
-                        className="absolute top-1/2 -translate-y-1/2 right-full mr-2 text-amber-500 cursor-pointer hover:text-amber-400 transition-colors z-20 flex items-center justify-center"
-                        onMouseEnter={(e) =>
-                          onTooltip({
-                            x: e.clientX,
-                            y: e.clientY,
-                            content: getAllocationTooltip,
-                          })
-                        }
-                        onMouseLeave={() => onTooltip(null)}
-                        style={{ pointerEvents: "auto" }}
-                      >
-                        <Package className="w-4 h-4" />
+                  // Default: Editable - Show Available Quantity
+                  (() => {
+                    const currentList = currentListId && currentListId !== "all" 
+                      ? sublists.find(l => l.id === currentListId) 
+                      : null;
+                    const isVirtualList = currentList && currentList.type === "virtual";
+                    
+                    if (isVirtualList) {
+                      // Virtual list: Don't show quantity input
+                      return <span className="text-sm font-bold text-slate-500">—</span>;
+                    }
+                    
+                    // Main inventory or transfer list: Show quantity input
+                    return (
+                      <div className="relative">
+                        <input 
+                          type="number" 
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm focus:border-blue-500 focus:outline-none text-right text-slate-200"
+                          value={availableQty}
+                          min="0"
+                          onChange={(e) => {
+                            const newAvailable = parseInt(e.target.value) || 0;
+                            // Calculate new total: available + allocated
+                            const newTotal = newAvailable + allocatedQty;
+                            onUpdate(
+                              item.actualIndex,
+                              "quantity",
+                              newTotal
+                            );
+                          }}
+                          onBlur={(e) => {
+                            const newAvailable = parseInt(e.target.value) || 0;
+                            // Calculate new total: available + allocated
+                            const newTotal = newAvailable + allocatedQty;
+                            onUpdate(
+                              item.actualIndex,
+                              "quantity",
+                              newTotal,
+                              true
+                            );
+                          }}
+                        />
+                        {isAllocated && (() => {
+                          // Check if current list is virtual - don't show count for virtual lists
+                          const isVirtualList = currentList && currentList.type === "virtual";
+                          
+                          return (
+                            <div
+                              className="absolute top-1/2 -translate-y-1/2 right-full mr-2 text-amber-500 cursor-pointer hover:text-amber-400 transition-colors z-20 flex items-center gap-1"
+                              onMouseEnter={(e) =>
+                                onTooltip({
+                                  x: e.clientX,
+                                  y: e.clientY,
+                                  content: getAllocationTooltip,
+                                })
+                              }
+                              onMouseLeave={() => onTooltip(null)}
+                              style={{ pointerEvents: "auto" }}
+                            >
+                              {!isVirtualList && <span className="text-xs font-medium">{allocatedQty}</span>}
+                              <Package className="w-4 h-4" />
+                            </div>
+                          );
+                        })()}
                       </div>
-                    )}
-                  </div>
+                    );
+                  })()
                 )}
-              </div>
+                  </div>
+                );
+              })()}
 
               {/* Price & Rarity - Hidden in Split View */}
               {!isSplitView && (
                 <>
                   <div className="w-24 px-2">
-                    <div className="relative">
+                        <div className="relative">
                       <span className="absolute left-2 top-1.5 text-slate-500 text-xs">
                         $
                       </span>
-                      <input
-                        type="number"
+                            <input 
+                                type="number" 
                         className="w-full bg-slate-900 border border-slate-700 rounded pl-4 pr-2 py-1 text-sm focus:border-emerald-500 focus:outline-none text-right text-slate-200"
-                        value={item.price}
-                        placeholder="0"
-                        min="0"
+                                value={item.price}
+                                placeholder="0"
+                                min="0"
                         onChange={(e) =>
                           onUpdate(item.actualIndex, "price", e.target.value)
                         }
@@ -1393,9 +1465,9 @@
                             true
                           )
                         }
-                      />
+                            />
+                        </div>
                     </div>
-                  </div>
                   <div className="w-28 px-2">
                     {isSublistMode ? (
                       <span
@@ -1406,11 +1478,11 @@
                         {rarityStyle.label}
                       </span>
                     ) : (
-                      <select
+                        <select 
                         className={`w-full border rounded px-2 py-1 text-[10px] font-medium focus:outline-none cursor-pointer appearance-none ${
                           rarityStyle.color
                         } ${rarityStyle.bg || "bg-slate-900"}`}
-                        value={item.rarity}
+                            value={item.rarity}
                         onChange={(e) =>
                           onUpdate(
                             item.actualIndex,
@@ -1418,17 +1490,17 @@
                             parseInt(e.target.value)
                           )
                         }
-                      >
-                        {Object.entries(RARITY_MAP).map(([val, config]) => (
+                        >
+                            {Object.entries(RARITY_MAP).map(([val, config]) => (
                           <option
                             key={val}
                             value={val}
                             className="bg-slate-800 text-slate-200"
                           >
-                            {config.label}
-                          </option>
-                        ))}
-                      </select>
+                                    {config.label}
+                                </option>
+                            ))}
+                        </select>
                     )}
                   </div>
                 </>
@@ -1449,60 +1521,62 @@
         contextMenu,
         sublists,
         onTooltip,
+        currentListId,
       }) => {
-        const containerRef = useRef(null);
-        const [scrollTop, setScrollTop] = useState(0);
-        const [containerHeight, setContainerHeight] = useState(0);
+            const containerRef = useRef(null);
+            const [scrollTop, setScrollTop] = useState(0);
+            const [containerHeight, setContainerHeight] = useState(0);
 
-        useEffect(() => {
-          if (!containerRef.current) return;
+            useEffect(() => {
+                if (!containerRef.current) return;
           const resizeObserver = new ResizeObserver((entries) => {
             for (let entry of entries)
-              setContainerHeight(entry.contentRect.height);
-          });
-          resizeObserver.observe(containerRef.current);
-          return () => resizeObserver.disconnect();
-        }, []);
+                        setContainerHeight(entry.contentRect.height);
+                });
+                resizeObserver.observe(containerRef.current);
+                return () => resizeObserver.disconnect();
+            }, []);
 
-        const handleScroll = (e) => {
-          setScrollTop(e.target.scrollTop);
+            const handleScroll = (e) => {
+                setScrollTop(e.target.scrollTop);
           if (onTooltip) onTooltip(null); // Hide tooltip on scroll
-        };
+            };
 
-        const totalHeight = items.length * ROW_HEIGHT;
+            const totalHeight = items.length * ROW_HEIGHT;
         const startIndex = Math.max(
           0,
           Math.floor(scrollTop / ROW_HEIGHT) - BUFFER_ITEMS
         );
-        const endIndex = Math.min(
-          items.length - 1,
-          Math.floor((scrollTop + containerHeight) / ROW_HEIGHT) + BUFFER_ITEMS
-        );
+            const endIndex = Math.min(
+                items.length - 1,
+                Math.floor((scrollTop + containerHeight) / ROW_HEIGHT) + BUFFER_ITEMS
+            );
 
-        const visibleItems = useMemo(() => {
-          const rows = [];
-          for (let i = startIndex; i <= endIndex; i++) {
-            const item = items[i];
-            rows.push(
-              <ItemRow
-                key={item.type || i}
-                index={i}
-                item={item}
-                style={{ top: i * ROW_HEIGHT, height: ROW_HEIGHT }}
-                imageMap={imageMap}
-                onUpdate={onUpdateItem}
+            const visibleItems = useMemo(() => {
+                const rows = [];
+                for (let i = startIndex; i <= endIndex; i++) {
+                    const item = items[i];
+                    rows.push(
+                        <ItemRow 
+                            key={item.type || i} 
+                            index={i}
+                            item={item}
+                            style={{ top: i * ROW_HEIGHT, height: ROW_HEIGHT }}
+                            imageMap={imageMap}
+                            onUpdate={onUpdateItem}
                 viewMode={viewMode}
                 activePanel={activePanel}
                 allocations={allocations}
                 onContextMenuOpen={onContextMenuOpen}
-                contextMenu={contextMenu}
+                            contextMenu={contextMenu}
                 onContextMenuClose={() => onContextMenuOpen(null, null)}
                 sublists={sublists}
                 onTooltip={onTooltip}
-              />
-            );
-          }
-          return rows;
+                currentListId={currentListId}
+                        />
+                    );
+                }
+                return rows;
         }, [
           startIndex,
           endIndex,
@@ -1518,12 +1592,12 @@
           onTooltip,
         ]);
 
-        return (
-          <div
-            ref={containerRef}
-            className="flex-1 overflow-y-auto relative bg-slate-950 scroll-smooth virtual-scroller"
-            onScroll={handleScroll}
-          >
+            return (
+                <div 
+                    ref={containerRef}
+                    className="flex-1 overflow-y-auto relative bg-slate-950 scroll-smooth virtual-scroller"
+                    onScroll={handleScroll}
+                >
             <div
               style={{
                 height: totalHeight,
@@ -1534,15 +1608,15 @@
               {items.length > 0 ? (
                 visibleItems
               ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 opacity-60">
-                  <Search className="w-12 h-12 mb-2" />
-                  <span className="text-lg">No matching items found</span>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 opacity-60">
+                                <Search className="w-12 h-12 mb-2" />
+                                <span className="text-lg">No matching items found</span>
+                            </div>
+                        )}
+                    </div>
                 </div>
-              )}
-            </div>
-          </div>
-        );
-      };
+            );
+        };
 
       const PanelHeader = ({
         side,
@@ -1638,16 +1712,16 @@
                 >
                   {selectedList.type === "transfer" ? "Transfer" : "Virtual"}
                 </span>
-              )}
-            </div>
-          </div>
-        );
-      };
+                        )}
+                    </div>
+                </div>
+            );
+        };
 
-      const App = () => {
+        const App = () => {
         // Data
-        const [data, setData] = useState(null);
-        const [imageMap, setImageMap] = useState(null);
+            const [data, setData] = useState(null);
+            const [imageMap, setImageMap] = useState(null);
         const [sublists, setSublists] = useState([]);
         const [metadata, setMetadata] = useState(null);
 
@@ -1656,8 +1730,8 @@
         const [leftListId, setLeftListId] = useState("all");
         const [rightListId, setRightListId] = useState("all");
         const [splitRatio, setSplitRatio] = useState(50);
-
-        // Search State
+            
+            // Search State
         const [searchQueryLeft, setSearchQueryLeft] = useState("");
         const [searchQueryRight, setSearchQueryRight] = useState("");
 
@@ -1670,20 +1744,20 @@
         const [isResizing, setIsResizing] = useState(false);
         const [tooltip, setTooltip] = useState(null); // { x, y, content }
 
-        // Modal State
-        const [showFirstClearModal, setShowFirstClearModal] = useState(false);
-        const [showSecondClearModal, setShowSecondClearModal] = useState(false);
+            // Modal State
+            const [showFirstClearModal, setShowFirstClearModal] = useState(false);
+            const [showSecondClearModal, setShowSecondClearModal] = useState(false);
         const [showExportFormatModal, setShowExportFormatModal] =
           useState(false);
         const [showUpdateConfirmModal, setShowUpdateConfirmModal] =
           useState(false);
-        const [pendingUpdateData, setPendingUpdateData] = useState(null);
+            const [pendingUpdateData, setPendingUpdateData] = useState(null);
         const [showSaveToDesktopModal, setShowSaveToDesktopModal] =
           useState(false);
-        const [isExporting, setIsExporting] = useState(false);
+            const [isExporting, setIsExporting] = useState(false);
 
-        // File input ref for update inventory
-        const updateInventoryInputRef = useRef(null);
+            // File input ref for update inventory
+            const updateInventoryInputRef = useRef(null);
 
         // Derived State: Allocations Map (ItemType -> TotalAllocated)
         const allocations = useMemo(() => {
@@ -1702,7 +1776,7 @@
         // --- Loading & DB ---
         const [isLoadingFromDB, setIsLoadingFromDB] = useState(true); // Add loading state
 
-        useEffect(() => {
+            useEffect(() => {
           const init = async () => {
             setIsLoadingFromDB(true);
             try {
@@ -1712,15 +1786,15 @@
                 setImageMap(loaded.imageMap);
                 setSublists(loaded.sublists || []);
                 setMetadata(loaded.metadata);
-              }
-            } catch (e) {
+                        }
+                    } catch (e) {
               console.error(e);
-            } finally {
-              setIsLoadingFromDB(false);
-            }
-          };
+                    } finally {
+                        setIsLoadingFromDB(false);
+                    }
+                };
           init();
-        }, []);
+            }, []);
 
         const handleDataLoaded = async (
           loadedData,
@@ -1750,7 +1824,7 @@
             let sourceItems = [];
             if (listId === "all") {
               sourceItems = data;
-            } else {
+                        } else {
               const list = sublists.find((l) => l.id === listId);
               if (!list) return [];
               // Map sublist items (refs) to real data
@@ -1846,9 +1920,37 @@
           saveSublistToDB(newSublists.find((l) => l.id === targetListId));
         };
 
-        const handleRemoveFromList = (listId, itemType) => {
+        const handleRemoveFromList = (listId, itemType, qty = null) => {
           const newSublists = sublists.map((list) => {
             if (list.id !== listId) return list;
+            
+            // For transfer collections, reduce quantity or remove if reaches 0
+            if (list.type === 'transfer') {
+              const itemRecord = list.items.find(i => i.itemType === itemType);
+              if (!itemRecord) return list;
+              
+              const newQty = qty !== null ? (itemRecord.quantity - qty) : 0;
+              
+              // If quantity reaches 0 or below, remove the item
+              if (newQty <= 0) {
+                return {
+                  ...list,
+                  items: list.items.filter((i) => i.itemType !== itemType),
+                };
+              }
+              
+              // Otherwise, reduce quantity
+              return {
+                ...list,
+                items: list.items.map(i => 
+                  i.itemType === itemType 
+                    ? { ...i, quantity: newQty }
+                    : i
+                ),
+              };
+            }
+            
+            // For virtual collections, just remove
             return {
               ...list,
               items: list.items.filter((i) => i.itemType !== itemType),
@@ -1858,6 +1960,83 @@
           saveSublistToDB(newSublists.find((l) => l.id === listId));
         };
 
+        const handleMoveItemBetweenLists = (sourceListId, targetListId, item, qty = null) => {
+          // Get the item from source list
+          const sourceList = sublists.find(l => l.id === sourceListId);
+          if (!sourceList) return;
+          
+          const itemRecord = sourceList.items.find(i => i.itemType === item.type);
+          if (!itemRecord) return;
+          
+          // Determine quantity to move
+          const moveQty = qty !== null ? qty : (sourceList.type === 'transfer' ? itemRecord.quantity : 1);
+          
+          // Update both lists in a single state update
+          const newSublists = sublists.map(list => {
+            // Remove from source list
+            if (list.id === sourceListId) {
+              if (list.type === 'transfer') {
+                const newQty = itemRecord.quantity - moveQty;
+                if (newQty <= 0) {
+                  // Remove item completely
+                  return {
+                    ...list,
+                    items: list.items.filter(i => i.itemType !== item.type)
+                  };
+                } else {
+                  // Reduce quantity
+                  return {
+                    ...list,
+                    items: list.items.map(i => 
+                      i.itemType === item.type 
+                        ? { ...i, quantity: newQty }
+                        : i
+                    )
+                  };
+                }
+              } else {
+                // Virtual collection - just remove
+                return {
+                  ...list,
+                  items: list.items.filter(i => i.itemType !== item.type)
+                };
+              }
+            }
+            
+            // Add to target list
+            if (list.id === targetListId) {
+              const existingIndex = list.items.findIndex(i => i.itemType === item.type);
+              const newItems = [...list.items];
+              
+              if (existingIndex >= 0) {
+                // Update quantity if transfer
+                if (list.type === 'transfer') {
+                  newItems[existingIndex].quantity += moveQty;
+                }
+                // Virtual collections don't update quantity
+              } else {
+                // Add new item
+                newItems.push({
+                  itemType: item.type,
+                  quantity: list.type === 'transfer' ? moveQty : 1
+                });
+              }
+              
+              return { ...list, items: newItems };
+            }
+            
+            return list;
+          });
+          
+          setSublists(newSublists);
+          
+          // Save both lists
+          const updatedSource = newSublists.find(l => l.id === sourceListId);
+          const updatedTarget = newSublists.find(l => l.id === targetListId);
+          if (updatedSource) saveSublistToDB(updatedSource);
+          if (updatedTarget) saveSublistToDB(updatedTarget);
+        };
+
         // --- Context Menu Actions ---
         const onContextMenuOpen = (item, position, panel) => {
           setContextMenu({ item, position, panel });
@@ -1865,49 +2044,155 @@
 
         const handleContextMenuAction = (action, arg) => {
           const { item, panel } = contextMenu;
+          
           if (action === "add") {
-            const targetList = sublists.find(
-              (l) => l.id === (panel === "left" ? rightListId : leftListId)
-            ); // Assuming add to OTHER panel
-            // But requirement says: Left Panel -> Add to Right Panel List
-            const targetId = rightListId;
-            const list = sublists.find((l) => l.id === targetId);
+            // Determine source and target based on which panel was clicked
+            const sourceListId = panel === "left" ? leftListId : rightListId;
+            const targetListId = panel === "left" ? rightListId : leftListId;
+            
+            // Get source item quantity
+            let sourceQty = item.quantity;
+            if (sourceListId !== "all") {
+              const sourceList = sublists.find(l => l.id === sourceListId);
+              if (sourceList) {
+                const itemRecord = sourceList.items.find(i => i.itemType === item.type);
+                if (itemRecord && sourceList.type === "transfer") {
+                  sourceQty = itemRecord.quantity;
+                } else if (itemRecord && sourceList.type === "virtual") {
+                  sourceQty = 1; // Virtual collections don't have quantity
+                } else {
+                  // Item not in source list
+                  setContextMenu(null);
+                    return;
+                }
+              } else {
+                setContextMenu(null);
+                        return;
+                    }
+            }
+            
+            // Validate: Don't allow transfer if source quantity is 0
+            if (sourceQty <= 0) {
+              setContextMenu(null);
+              return;
+            }
+            
+            // Handle adding to main inventory
+            if (targetListId === "all") {
+              // Adding to main inventory - remove from source list
+              // If source has more than 1, ask how many to return
+              if (sourceListId !== "all" && sourceQty > 1) {
+                setModalState({
+                  type: "qty",
+                  data: { 
+                    item, 
+                    max: sourceQty, 
+                    listId: "all",
+                    sourceListId: sourceListId,
+                    isMove: true
+                  },
+                });
+                        } else {
+                // Return all (quantity is 1 or from main inventory)
+                if (sourceListId !== "all") {
+                  handleRemoveFromList(sourceListId, item.type, sourceQty);
+                }
+              }
+              setContextMenu(null);
+              return;
+            }
 
-            if (list.type === "transfer") {
-              // Open Qty Modal
-              // Calculate max available
-              const allocated = allocations.get(item.type) || 0;
-              const available = item.quantity - allocated;
+            const targetList = sublists.find((l) => l.id === targetListId);
+            if (!targetList) {
+              setContextMenu(null);
+              return;
+            }
+
+            // Validate: Don't allow transfer if source quantity is 0 or would result in negative
+            if (sourceQty <= 0) {
+              setContextMenu(null);
+              return;
+            }
+            
+            // If target is transfer collection and source has more than 1, ask for quantity
+            if (targetList.type === "transfer" && sourceQty > 1) {
+              // Calculate max available based on source
+              let maxQty = sourceQty;
+              if (sourceListId === "all") {
+                // From main inventory - consider already allocated
+                const allocated = allocations.get(item.type) || 0;
+                maxQty = item.quantity - allocated;
+                
+                // Don't allow if available is 0 or negative
+                if (maxQty <= 0) {
+                  setContextMenu(null);
+                  return;
+                }
+              }
+              
               setModalState({
                 type: "qty",
-                data: { item, max: available, listId: targetId },
+                data: { 
+                  item, 
+                  max: maxQty, 
+                  listId: targetListId,
+                  sourceListId: sourceListId,
+                  isMove: sourceListId !== "all" // Only move if source is not main inventory
+                },
               });
             } else {
-              handleAddItemToList(targetId, item);
+              // Add all (quantity is 1 or virtual collection)
+              const qtyToAdd = sourceQty > 1 ? sourceQty : 1;
+              
+              // Validate quantity before adding - double check
+              if (qtyToAdd <= 0 || sourceQty <= 0) {
+                setContextMenu(null);
+                return;
+              }
+              
+              // Additional validation for main inventory
+              if (sourceListId === "all") {
+                const allocated = allocations.get(item.type) || 0;
+                const available = item.quantity - allocated;
+                if (available <= 0) {
+                  setContextMenu(null);
+                  return;
+                }
+              }
+              
+              // Add to target
+              handleAddItemToList(targetListId, item, qtyToAdd);
+              
+              // If source is a list, remove from source (will auto-remove if quantity reaches 0)
+              if (sourceListId !== "all") {
+                handleRemoveFromList(sourceListId, item.type, qtyToAdd);
+              }
             }
           } else if (action === "remove") {
             // Remove from the list active in this panel
             const listId = panel === "left" ? leftListId : rightListId;
-            handleRemoveFromList(listId, item.type);
+            if (listId !== "all") {
+              handleRemoveFromList(listId, item.type);
+            }
           }
           setContextMenu(null);
         };
 
         // --- Export/Import Handlers ---
-        const handleSaveToDesktop = () => {
-          setShowSaveToDesktopModal(true);
-        };
+            const handleSaveToDesktop = () => {
+                setShowSaveToDesktopModal(true);
+            };
 
-        const handleSaveToDesktopConfirm = async () => {
-          setShowSaveToDesktopModal(false);
-          setIsExporting(true);
-          try {
+            const handleSaveToDesktopConfirm = async () => {
+                setShowSaveToDesktopModal(false);
+                setIsExporting(true);
+                try {
             if (!window.initSqlJs) throw new Error("SQL.js not loaded.");
             const SQL = await window.initSqlJs({
               locateFile: (file) =>
                 `https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/${file}`,
-            });
-            const db = new SQL.Database();
+                    });
+                    const db = new SQL.Database();
 
             db.run(
               `CREATE TABLE IF NOT EXISTS items (type TEXT PRIMARY KEY, id TEXT, name TEXT, quantity INTEGER, price REAL, rarity INTEGER, image TEXT, data TEXT);`
@@ -1922,7 +2207,7 @@
               `CREATE TABLE IF NOT EXISTS sublists (id TEXT PRIMARY KEY, name TEXT, type TEXT, items TEXT, createdAt INTEGER, updatedAt INTEGER);`
             );
 
-            const now = new Date();
+                    const now = new Date();
             const currentDate = now.toLocaleString("en-US", {
               weekday: "long",
               year: "numeric",
@@ -1932,8 +2217,8 @@
               minute: "2-digit",
               second: "2-digit",
               timeZoneName: "short",
-            });
-            const currentTimestamp = now.getTime();
+                    });
+                    const currentTimestamp = now.getTime();
 
             db.run(
               `INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)`,
@@ -1950,30 +2235,30 @@
             const stmt = db.prepare(
               `INSERT OR REPLACE INTO items (type, id, name, quantity, price, rarity, image, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
             );
-            for (const item of exportData) {
-              stmt.run([
+                    for (const item of exportData) {
+                        stmt.run([
                 item.type || item.id || "",
                 item.id || "",
                 item.name || "",
-                item.quantity || 0,
-                item.price || 0,
-                item.rarity || 0,
+                            item.quantity || 0,
+                            item.price || 0,
+                            item.rarity || 0,
                 item.image || "",
                 JSON.stringify(item),
-              ]);
-            }
-            stmt.free();
+                        ]);
+                    }
+                    stmt.free();
 
-            const imageBlobs = await getImagesFromIndexedDB();
+                    const imageBlobs = await getImagesFromIndexedDB();
             const imageStmt = db.prepare(
               `INSERT OR REPLACE INTO images (filename, data) VALUES (?, ?)`
             );
-            for (const [filename, blob] of imageBlobs.entries()) {
-              const arrayBuffer = await blob.arrayBuffer();
-              const uint8Array = new Uint8Array(arrayBuffer);
-              imageStmt.run([filename, uint8Array]);
-            }
-            imageStmt.free();
+                    for (const [filename, blob] of imageBlobs.entries()) {
+                        const arrayBuffer = await blob.arrayBuffer();
+                        const uint8Array = new Uint8Array(arrayBuffer);
+                        imageStmt.run([filename, uint8Array]);
+                    }
+                    imageStmt.free();
 
             if (sublists && sublists.length > 0) {
               const sublistStmt = db.prepare(
@@ -1992,38 +2277,38 @@
               sublistStmt.free();
             }
 
-            const dbData = db.export();
+                    const dbData = db.export();
             const dbBlob = new Blob([dbData], {
               type: "application/x-sqlite3",
             });
-            const url = URL.createObjectURL(dbBlob);
-            const a = document.createElement("a");
-            a.href = url;
+                    const url = URL.createObjectURL(dbBlob);
+                    const a = document.createElement("a");
+                    a.href = url;
             const dateStr = now.toISOString().split("T")[0];
-            a.download = `my_vmk_furniture_${dateStr}.db`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            db.close();
-          } catch (e) {
+                    a.download = `my_vmk_furniture_${dateStr}.db`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    db.close();
+                } catch (e) {
             console.error("Error saving to desktop:", e);
-            alert(`Error saving to desktop: ${e.message}`);
-          } finally {
-            setIsExporting(false);
-          }
-        };
+                    alert(`Error saving to desktop: ${e.message}`);
+                } finally {
+                    setIsExporting(false);
+                }
+            };
 
-        const handleExportFor = () => {
-          setShowExportFormatModal(true);
-        };
+            const handleExportFor = () => {
+                setShowExportFormatModal(true);
+            };
 
-        const handleExportFormat = async (format) => {
-          setShowExportFormatModal(false);
-          setIsExporting(true);
+            const handleExportFormat = async (format) => {
+                setShowExportFormatModal(false);
+                setIsExporting(true);
           // Simplified - just show message for now
           alert(`Export to ${format} format - Full implementation needed`);
-          setIsExporting(false);
+                    setIsExporting(false);
         };
 
         const handleClear = () => {
@@ -2106,8 +2391,8 @@
           return <FileUploader onDataLoaded={handleDataLoaded} />;
         }
 
-        return (
-          <div className="flex flex-col h-screen w-full bg-slate-950 text-slate-100 font-sans overflow-hidden">
+            return (
+                <div className="flex flex-col h-screen w-full bg-slate-950 text-slate-100 font-sans overflow-hidden">
             {/* Header - Adaptive */}
             {!isSplitView && (
               <div className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between shadow-xl shrink-0">
@@ -2121,16 +2406,16 @@
                   >
                     <Layout className="w-4 h-4" /> Split View
                   </button>
-                  {data && (
+                                {data && (
                     <FileMenu
                       onSaveToDesktop={handleSaveToDesktop}
                       onExportFor={handleExportFor}
                       onClear={handleClear}
                       onUpdateInventory={handleUpdateInventory}
                     />
-                  )}
-                </div>
-              </div>
+                                )}
+                            </div>
+                        </div>
             )}
 
             {/* Main Content Area */}
@@ -2158,16 +2443,24 @@
                       value={searchQueryLeft}
                       onChange={(e) => setSearchQueryLeft(e.target.value)}
                       className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-                    />
-                  </div>
-                </div>
+                                        />
+                                    </div>
+                            </div>
 
                 {/* Header Row */}
                 <div className="flex items-center bg-slate-900/80 backdrop-blur border-b border-slate-800 px-4 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider shrink-0 select-none">
                   <div className="w-8">#</div>
                   <div className="w-16 mr-3">Img</div>
                   <div className="flex-1">Details</div>
-                  <div className="w-24 px-2 text-right">Qty</div>
+                  {(() => {
+                    const currentList = leftListId && leftListId !== "all" 
+                      ? sublists.find(l => l.id === leftListId) 
+                      : null;
+                    const isVirtualList = currentList && currentList.type === "virtual";
+                    return !isVirtualList ? (
+                      <div className="w-24 px-2 text-right">Qty</div>
+                    ) : null;
+                  })()}
                   {!isSplitView && (
                     <>
                       <div className="w-24 px-2 text-right">Price</div>
@@ -2195,8 +2488,9 @@
                   contextMenu={contextMenu}
                   sublists={sublists}
                   onTooltip={setTooltip}
+                  currentListId={leftListId}
                 />
-              </div>
+                    </div>
 
               {/* Divider & Right Panel (Split View Only) */}
               {isSplitView && (
@@ -2242,13 +2536,21 @@
                       <div className="w-8">#</div>
                       <div className="w-16 mr-3">Img</div>
                       <div className="flex-1">Details</div>
-                      <div className="w-24 px-2 text-right">Qty</div>
-                    </div>
-
-                    <VirtualList
+                      {(() => {
+                        const currentList = rightListId && rightListId !== "all" 
+                          ? sublists.find(l => l.id === rightListId) 
+                          : null;
+                        const isVirtualList = currentList && currentList.type === "virtual";
+                        return !isVirtualList ? (
+                          <div className="w-24 px-2 text-right">Qty</div>
+                        ) : null;
+                      })()}
+                                </div>
+                                
+                                <VirtualList 
                       items={rightItems}
-                      imageMap={imageMap}
-                      onUpdateItem={handleUpdateItem}
+                                    imageMap={imageMap} 
+                                    onUpdateItem={handleUpdateItem} 
                       viewMode="split"
                       activePanel="right"
                       allocations={allocations}
@@ -2258,11 +2560,12 @@
                       contextMenu={contextMenu}
                       sublists={sublists}
                       onTooltip={setTooltip}
+                      currentListId={rightListId}
                     />
                   </div>
-                </>
-              )}
-            </div>
+                            </>
+                        )}
+                    </div>
 
             {/* Modals & Context Menu */}
             <CreateListModal
@@ -2278,11 +2581,34 @@
                 itemName={modalState.data.item.name}
                 maxQuantity={modalState.data.max}
                 onConfirm={(qty) => {
-                  handleAddItemToList(
-                    modalState.data.listId,
-                    modalState.data.item,
-                    qty
-                  );
+                  // Validate quantity
+                  if (qty <= 0 || qty > modalState.data.max) {
+                    setModalState({ type: null });
+                    return;
+                  }
+                  
+                  if (modalState.data.isMove) {
+                    // Moving from one collection/list to another
+                    if (modalState.data.listId === "all") {
+                      // Returning to main inventory - just remove from source
+                      handleRemoveFromList(modalState.data.sourceListId, modalState.data.item.type, qty);
+                    } else {
+                      // Moving to another collection
+                      handleMoveItemBetweenLists(
+                        modalState.data.sourceListId,
+                        modalState.data.listId,
+                        modalState.data.item,
+                        qty
+                      );
+                    }
+                  } else {
+                    // Adding from main inventory to collection
+                    handleAddItemToList(
+                      modalState.data.listId,
+                      modalState.data.item,
+                      qty
+                    );
+                  }
                   setModalState({ type: null });
                 }}
               />
@@ -2306,32 +2632,80 @@
                   setContextMenu(null);
                 }}
               >
-                {/* Actions Logic */}
-                {contextMenu.panel === "left" &&
-                  isSplitView &&
-                  rightListId !== "all" && (
-                    <>
-                      <button
-                        onClick={() => handleContextMenuAction("add")}
-                        className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
-                      >
-                        Add to "
-                        {sublists.find((l) => l.id === rightListId)?.name}"
-                      </button>
-                      <div className="h-px bg-slate-700 my-1"></div>
-                    </>
-                  )}
-                {contextMenu.panel === "right" &&
-                  isSplitView &&
-                  rightListId !== "all" && (
-                    <button
-                      onClick={() => handleContextMenuAction("remove")}
-                      className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-slate-700 transition-colors"
-                    >
-                      Remove from{" "}
-                      {sublists.find((l) => l.id === rightListId)?.name}
-                    </button>
-                  )}
+                {/* Actions Logic - Always show "Add to [Opposite Panel]" */}
+                {isSplitView && (
+                  <>
+                    {(() => {
+                      const sourceListId = contextMenu.panel === "left" ? leftListId : rightListId;
+                      const targetListId = contextMenu.panel === "left" ? rightListId : leftListId;
+                      
+                      // Get source item quantity to validate
+                      let sourceQty = contextMenu.item.quantity;
+                      if (sourceListId !== "all") {
+                        const sourceList = sublists.find(l => l.id === sourceListId);
+                        if (sourceList) {
+                          const itemRecord = sourceList.items.find(i => i.itemType === contextMenu.item.type);
+                          if (itemRecord && sourceList.type === "transfer") {
+                            sourceQty = itemRecord.quantity;
+                          } else if (itemRecord && sourceList.type === "virtual") {
+                            sourceQty = 1; // Virtual collections don't have quantity
+                          } else {
+                            // Item not in source list
+                            return null;
+                          }
+                        } else {
+                          return null;
+                        }
+                      } else {
+                        // From main inventory - check available quantity
+                        const allocated = allocations.get(contextMenu.item.type) || 0;
+                        sourceQty = contextMenu.item.quantity - allocated;
+                      }
+                      
+                      // Don't show if source quantity is 0 or negative
+                      if (sourceQty <= 0) {
+                        return null;
+                      }
+                      
+                      // Check if source is a virtual list - show "Remove from list" instead
+                      const sourceList = sublists.find(l => l.id === sourceListId);
+                      if (sourceList && sourceList.type === "virtual") {
+                        return (
+                          <button
+                            onClick={() => handleContextMenuAction("remove")}
+                            className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-slate-700 transition-colors"
+                          >
+                            Remove from "{sourceList.name}"
+                          </button>
+                        );
+                      }
+                      
+                      // Show "Add to Main Inventory" if target is "all"
+                      if (targetListId === "all") {
+                        return (
+                          <button
+                            onClick={() => handleContextMenuAction("add")}
+                            className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
+                          >
+                            Add to Main Inventory
+                          </button>
+                        );
+                      }
+                      
+                      const targetList = sublists.find((l) => l.id === targetListId);
+                      if (!targetList) return null;
+                      
+                      return (
+                        <button
+                          onClick={() => handleContextMenuAction("add")}
+                          className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
+                        >
+                          Add to "{targetList.name}"
+                        </button>
+                      );
+                    })()}
+                  </>
+                )}
 
                 {/* Generic Actions */}
                 <button className="w-full text-left px-4 py-2 text-sm text-slate-400 hover:bg-slate-700 transition-colors">
@@ -2341,9 +2715,9 @@
             )}
 
             {/* Export/Import Modals */}
-            <Modal
-              isOpen={showFirstClearModal}
-              onClose={() => setShowFirstClearModal(false)}
+                    <Modal
+                        isOpen={showFirstClearModal}
+                        onClose={() => setShowFirstClearModal(false)}
               title="Delete Inventory?"
               footer={
                 <>
@@ -2368,10 +2742,10 @@
               </p>
             </Modal>
 
-            <Modal
-              isOpen={showSecondClearModal}
-              onClose={() => setShowSecondClearModal(false)}
-              title="Confirm"
+                    <Modal
+                        isOpen={showSecondClearModal}
+                        onClose={() => setShowSecondClearModal(false)}
+                        title="Confirm"
               footer={
                 <>
                   <button
@@ -2394,19 +2768,19 @@
               </p>
             </Modal>
 
-            <ExportFormatModal
-              isOpen={showExportFormatModal}
-              onClose={() => setShowExportFormatModal(false)}
-              onSelectFormat={handleExportFormat}
-            />
+                    <ExportFormatModal
+                        isOpen={showExportFormatModal}
+                        onClose={() => setShowExportFormatModal(false)}
+                        onSelectFormat={handleExportFormat}
+                    />
 
-            <Modal
-              isOpen={showUpdateConfirmModal}
-              onClose={() => {
-                setShowUpdateConfirmModal(false);
-                setPendingUpdateData(null);
-              }}
-              title="Upload new extraction"
+                    <Modal
+                        isOpen={showUpdateConfirmModal}
+                        onClose={() => {
+                            setShowUpdateConfirmModal(false);
+                            setPendingUpdateData(null);
+                        }}
+                        title="Upload new extraction"
               footer={
                 <>
                   <button
@@ -2433,10 +2807,10 @@
               </p>
             </Modal>
 
-            <Modal
-              isOpen={showSaveToDesktopModal}
-              onClose={() => setShowSaveToDesktopModal(false)}
-              title="Save to Desktop"
+                    <Modal
+                        isOpen={showSaveToDesktopModal}
+                        onClose={() => setShowSaveToDesktopModal(false)}
+                        title="Save to Desktop"
               footer={
                 <>
                   <button
@@ -2463,15 +2837,15 @@
             {/* Tooltip Overlay */}
             <Tooltip data={tooltip} />
 
-            {/* Hidden file input for update inventory */}
-            <input
-              ref={updateInventoryInputRef}
-              type="file"
+                    {/* Hidden file input for update inventory */}
+                    <input
+                        ref={updateInventoryInputRef}
+                        type="file"
               style={{ display: "none" }}
-              webkitdirectory=""
-              directory=""
-              onChange={handleUpdateInventoryFileSelect}
-            />
+                        webkitdirectory=""
+                        directory=""
+                        onChange={handleUpdateInventoryFileSelect}
+                    />
 
             {isExporting && (
               <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
@@ -2484,12 +2858,12 @@
                 </div>
               </div>
             )}
-          </div>
-        );
-      };
+                </div>
+            );
+        };
 
       const root = ReactDOM.createRoot(document.getElementById("root"));
-      root.render(<App />);
+        root.render(<App />);
     </script>
-  </body>
+</body>
 </html>
