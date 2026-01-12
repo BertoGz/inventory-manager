@@ -1729,46 +1729,46 @@
                             ))}
                         </div>
 
-                        <div className="mb-6 border-t border-slate-700 pt-4">
-                            <p className="text-sm text-slate-400 mb-3">
-                                Select metadata to export:
+                        <div className="mb-4 border-t border-slate-800 pt-3">
+                            <p className="text-xs text-slate-500 mb-2">
+                                Metadata options:
                             </p>
-                            <div className="space-y-2">
-                                <label className="flex items-center gap-3 px-4 py-2 bg-slate-800 rounded-lg cursor-pointer hover:bg-slate-700 transition-colors">
+                            <div className="flex flex-wrap gap-3">
+                                <label className="flex items-center gap-1.5 cursor-pointer">
                                     <input
                                         type="checkbox"
                                         checked={metadataOptions.images}
                                         onChange={() => toggleMetadataOption("images")}
-                                        className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500"
+                                        className="w-3.5 h-3.5 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500"
                                     />
-                                    <span className="text-slate-300 flex-1">Images</span>
+                                    <span className="text-xs text-slate-400">Images</span>
                                 </label>
-                                <label className="flex items-center gap-3 px-4 py-2 bg-slate-800 rounded-lg cursor-pointer hover:bg-slate-700 transition-colors">
+                                <label className="flex items-center gap-1.5 cursor-pointer">
                                     <input
                                         type="checkbox"
                                         checked={metadataOptions.quantity}
                                         onChange={() => toggleMetadataOption("quantity")}
-                                        className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500"
+                                        className="w-3.5 h-3.5 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500"
                                     />
-                                    <span className="text-slate-300 flex-1">Quantity</span>
+                                    <span className="text-xs text-slate-400">Quantity</span>
                                 </label>
-                                <label className="flex items-center gap-3 px-4 py-2 bg-slate-800 rounded-lg cursor-pointer hover:bg-slate-700 transition-colors">
+                                <label className="flex items-center gap-1.5 cursor-pointer">
                                     <input
                                         type="checkbox"
                                         checked={metadataOptions.rarity}
                                         onChange={() => toggleMetadataOption("rarity")}
-                                        className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500"
+                                        className="w-3.5 h-3.5 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500"
                                     />
-                                    <span className="text-slate-300 flex-1">Rarity</span>
+                                    <span className="text-xs text-slate-400">Rarity</span>
                                 </label>
-                                <label className="flex items-center gap-3 px-4 py-2 bg-slate-800 rounded-lg cursor-pointer hover:bg-slate-700 transition-colors">
+                                <label className="flex items-center gap-1.5 cursor-pointer">
                                     <input
                                         type="checkbox"
                                         checked={metadataOptions.prices}
                                         onChange={() => toggleMetadataOption("prices")}
-                                        className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500"
+                                        className="w-3.5 h-3.5 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500"
                                     />
-                                    <span className="text-slate-300 flex-1">Prices</span>
+                                    <span className="text-xs text-slate-400">Prices</span>
                                 </label>
                             </div>
                         </div>
