@@ -687,23 +687,16 @@
                 const writeTx = db.transaction([STORE_INVENTORY_ITEMS], "readwrite");
                 const writeStore = writeTx.objectStore(STORE_INVENTORY_ITEMS);
 
-                // Update Source
+                // Update Source - keep item even if quantity is 0
                 const newSourceQuantity = sourceItem.quantity - quantity;
-                if (newSourceQuantity > 0) {
-                    // We must use the Primary Key to update
-                    writeStore.put(
-                        {
-                            ...sourceItem,
-                            quantity: newSourceQuantity,
-                        },
-                        sourceKey
-                    );
-                } else {
-                    // We must use the Primary Key to delete
-                    if (sourceKey) {
-                        writeStore.delete(sourceKey);
-                    }
-                }
+                // We must use the Primary Key to update
+                writeStore.put(
+                    {
+                        ...sourceItem,
+                        quantity: Math.max(0, newSourceQuantity), // Ensure quantity is never negative
+                    },
+                    sourceKey
+                );
 
                 // Update or Create Target
                 if (targetItem && targetKey) {
@@ -1510,6 +1503,7 @@
             onClose,
             sublists,
             item,
+            imageMap,
             onAdd,
         }) => {
             const [selectedSublistId, setSelectedSublistId] = useState("");
@@ -1522,9 +1516,12 @@
 
             if (!isOpen || !item) return null;
 
+            const imageUrl = imageMap?.get(item.image);
             const handleAdd = () => {
-                if (selectedSublistId) {
+                if (selectedSublistId && selectedSublistId.trim() !== "") {
                     onAdd(selectedSublistId, 1);
+                } else {
+                    console.error("No sublist selected");
                 }
             };
 
@@ -1541,9 +1538,25 @@
                             Add to Sublist
                         </h3>
                         <div className="mb-4">
-                            <div className="px-4 py-2 bg-slate-800 rounded-lg mb-4">
-                                <div className="text-sm font-medium text-slate-300">{item.name}</div>
-                                <div className="text-xs text-slate-500 mt-1">{item.type}</div>
+                            <div className="px-4 py-3 bg-slate-800 rounded-lg mb-4 flex items-center gap-3">
+                                <div className="w-16 h-16 flex-shrink-0 rounded-lg bg-slate-700/50 border border-slate-600/50 overflow-hidden relative">
+                                    {imageUrl ? (
+                                        <img
+                                            src={imageUrl}
+                                            alt={item.name}
+                                            className="w-full h-full object-contain"
+                                            loading="lazy"
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full flex flex-col items-center justify-center text-slate-600">
+                                            <ImageIcon className="w-5 h-5 opacity-40" />
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-medium text-slate-300 truncate">{item.name}</div>
+                                    <div className="text-xs text-slate-500 mt-1 truncate">{item.type}</div>
+                                </div>
                             </div>
                             <label className="block text-sm text-slate-400 mb-2">
                                 Select Sublist
@@ -1588,8 +1601,16 @@
             inventories,
             onExport,
             preSelectedId,
+            tabInventoryId,
+            sublists = [],
         }) => {
             const [selectedIds, setSelectedIds] = useState(new Set());
+            const [metadataOptions, setMetadataOptions] = useState({
+                images: true,
+                quantity: true,
+                rarity: true,
+                prices: true,
+            });
 
             useEffect(() => {
                 if (isOpen && preSelectedId) {
@@ -1597,9 +1618,53 @@
                 } else if (isOpen) {
                     setSelectedIds(new Set());
                 }
+                // Reset metadata options to all enabled when modal opens
+                if (isOpen) {
+                    setMetadataOptions({
+                        images: true,
+                        quantity: true,
+                        rarity: true,
+                        prices: true,
+                    });
+                }
             }, [isOpen, preSelectedId]);
 
             if (!isOpen) return null;
+
+            // Filter inventories to show only the tab's inventory and its sublists
+            const filteredInventories = tabInventoryId
+                ? inventories.filter((inv) => inv.id === tabInventoryId)
+                : inventories;
+
+            // Create list items: main inventory + sublists
+            const exportableItems = [];
+            if (tabInventoryId) {
+                const mainInventory = inventories.find((inv) => inv.id === tabInventoryId);
+                if (mainInventory) {
+                    exportableItems.push({
+                        id: mainInventory.id,
+                        name: mainInventory.name,
+                        type: "inventory",
+                    });
+                }
+                // Add sublists
+                sublists.forEach((sublist) => {
+                    exportableItems.push({
+                        id: sublist.id,
+                        name: sublist.name,
+                        type: "sublist",
+                    });
+                });
+            } else {
+                // Fallback: show all inventories if no tabInventoryId
+                filteredInventories.forEach((inv) => {
+                    exportableItems.push({
+                        id: inv.id,
+                        name: inv.name,
+                        type: "inventory",
+                    });
+                });
+            }
 
             const toggleSelection = (id) => {
                 const newSet = new Set(selectedIds);
@@ -1611,9 +1676,16 @@
                 setSelectedIds(newSet);
             };
 
+            const toggleMetadataOption = (option) => {
+                setMetadataOptions((prev) => ({
+                    ...prev,
+                    [option]: !prev[option],
+                }));
+            };
+
             const handleExport = () => {
                 if (selectedIds.size > 0) {
-                    onExport(Array.from(selectedIds));
+                    onExport(Array.from(selectedIds), metadataOptions);
                     setSelectedIds(new Set());
                     onClose();
                 }
@@ -1636,20 +1708,69 @@
                         </p>
 
                         <div className="space-y-2 mb-6">
-                            {inventories.map((inv) => (
+                            {exportableItems.map((item) => (
                                 <label
-                                    key={inv.id}
+                                    key={item.id}
                                     className="flex items-center gap-3 px-4 py-2 bg-slate-800 rounded-lg cursor-pointer hover:bg-slate-700 transition-colors"
                                 >
                                     <input
                                         type="checkbox"
-                                        checked={selectedIds.has(inv.id)}
-                                        onChange={() => toggleSelection(inv.id)}
+                                        checked={selectedIds.has(item.id)}
+                                        onChange={() => toggleSelection(item.id)}
                                         className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500"
                                     />
-                                    <span className="text-slate-300 flex-1">{inv.name}</span>
+                                    <span className="text-slate-300 flex-1">
+                                        {item.name}
+                                        {item.type === "sublist" && (
+                                            <span className="text-xs text-slate-500 ml-2">(Sublist)</span>
+                                        )}
+                                    </span>
                                 </label>
                             ))}
+                        </div>
+
+                        <div className="mb-6 border-t border-slate-700 pt-4">
+                            <p className="text-sm text-slate-400 mb-3">
+                                Select metadata to export:
+                            </p>
+                            <div className="space-y-2">
+                                <label className="flex items-center gap-3 px-4 py-2 bg-slate-800 rounded-lg cursor-pointer hover:bg-slate-700 transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={metadataOptions.images}
+                                        onChange={() => toggleMetadataOption("images")}
+                                        className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500"
+                                    />
+                                    <span className="text-slate-300 flex-1">Images</span>
+                                </label>
+                                <label className="flex items-center gap-3 px-4 py-2 bg-slate-800 rounded-lg cursor-pointer hover:bg-slate-700 transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={metadataOptions.quantity}
+                                        onChange={() => toggleMetadataOption("quantity")}
+                                        className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500"
+                                    />
+                                    <span className="text-slate-300 flex-1">Quantity</span>
+                                </label>
+                                <label className="flex items-center gap-3 px-4 py-2 bg-slate-800 rounded-lg cursor-pointer hover:bg-slate-700 transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={metadataOptions.rarity}
+                                        onChange={() => toggleMetadataOption("rarity")}
+                                        className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500"
+                                    />
+                                    <span className="text-slate-300 flex-1">Rarity</span>
+                                </label>
+                                <label className="flex items-center gap-3 px-4 py-2 bg-slate-800 rounded-lg cursor-pointer hover:bg-slate-700 transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={metadataOptions.prices}
+                                        onChange={() => toggleMetadataOption("prices")}
+                                        className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500"
+                                    />
+                                    <span className="text-slate-300 flex-1">Prices</span>
+                                </label>
+                            </div>
                         </div>
 
                         <div className="flex justify-end gap-3">
@@ -1679,6 +1800,7 @@
             item,
             sourceInventoryId,
             inventories,
+            imageMap,
             onTransfer,
         }) => {
             const [targetInventoryId, setTargetInventoryId] = useState("");
@@ -1695,6 +1817,7 @@
 
             if (!isOpen || !item) return null;
 
+            const imageUrl = imageMap?.get(item.image);
             const availableInventories = inventories.filter(
                 (inv) => inv.id !== sourceInventoryId
             );
@@ -1724,13 +1847,29 @@
                             Transfer Item
                         </h3>
                         <div className="mb-4">
-                            <p className="text-sm text-slate-400 mb-2">
-                                Item: <span className="text-slate-200">{item.name}</span>
-                            </p>
-                            <p className="text-sm text-slate-400">
-                                Available Quantity:{" "}
-                                <span className="text-slate-200">{maxQuantity}</span>
-                            </p>
+                            <div className="px-4 py-3 bg-slate-800 rounded-lg mb-4 flex items-center gap-3">
+                                <div className="w-16 h-16 flex-shrink-0 rounded-lg bg-slate-700/50 border border-slate-600/50 overflow-hidden relative">
+                                    {imageUrl ? (
+                                        <img
+                                            src={imageUrl}
+                                            alt={item.name}
+                                            className="w-full h-full object-contain"
+                                            loading="lazy"
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full flex flex-col items-center justify-center text-slate-600">
+                                            <ImageIcon className="w-5 h-5 opacity-40" />
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-medium text-slate-300 truncate">{item.name}</div>
+                                    <div className="text-xs text-slate-500 mt-1 truncate">{item.type}</div>
+                                    <div className="text-xs text-slate-400 mt-1">
+                                        Available: <span className="text-slate-200">{maxQuantity}</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div className="mb-4">
                             <label className="block text-sm text-slate-400 mb-2">
@@ -1757,8 +1896,8 @@
                                 type="number"
                                 value={quantity}
                                 onChange={(e) => {
-                                    const val = parseInt(e.target.value) || 0;
-                                    setQuantity(Math.min(Math.max(0, val), maxQuantity));
+                                    const val = parseInt(e.target.value) || 1;
+                                    setQuantity(Math.min(Math.max(1, val), maxQuantity));
                                 }}
                                 min="1"
                                 max={maxQuantity}
@@ -2466,6 +2605,8 @@
             const [scrollTop, setScrollTop] = useState(0);
             const [containerHeight, setContainerHeight] = useState(0);
             const [contextMenu, setContextMenu] = useState(null);
+            const savedScrollPositionRef = useRef(0);
+            const previousItemsRef = useRef(items);
 
             useEffect(() => {
                 if (!containerRef.current) return;
@@ -2501,8 +2642,37 @@
             };
 
             const handleScroll = (e) => {
-                setScrollTop(e.target.scrollTop);
+                const currentScrollTop = e.target.scrollTop;
+                setScrollTop(currentScrollTop);
+                savedScrollPositionRef.current = currentScrollTop;
             };
+
+            // Save scroll position before items change
+            useEffect(() => {
+                if (containerRef.current) {
+                    savedScrollPositionRef.current = containerRef.current.scrollTop;
+                }
+                previousItemsRef.current = items;
+            }, [items]);
+
+            // Restore scroll position after items update (only if items actually changed)
+            useEffect(() => {
+                // Check if items actually changed (not just a re-render)
+                const itemsChanged = previousItemsRef.current !== items &&
+                    (previousItemsRef.current?.length !== items?.length ||
+                        previousItemsRef.current?.some((item, idx) => item?.type !== items?.[idx]?.type));
+
+                if (itemsChanged && containerRef.current && savedScrollPositionRef.current > 0) {
+                    // Use double requestAnimationFrame to ensure DOM has fully updated
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            if (containerRef.current) {
+                                containerRef.current.scrollTop = savedScrollPositionRef.current;
+                            }
+                        });
+                    });
+                }
+            }, [items]);
 
             const totalHeight = items.length * ROW_HEIGHT;
             const startIndex = Math.max(
@@ -2632,10 +2802,17 @@
             const [showExportInventoryModal, setShowExportInventoryModal] =
                 useState(false);
             const [pendingExportInventoryId, setPendingExportInventoryId] = useState(null);
+            const [pendingExportTabInventoryId, setPendingExportTabInventoryId] = useState(null);
+            const [exportMetadataOptions, setExportMetadataOptions] = useState({
+                images: true,
+                quantity: true,
+                rarity: true,
+                prices: true,
+            });
             const [showSettingsMenu, setShowSettingsMenu] = useState(false);
             const [showTransferModal, setShowTransferModal] = useState(false);
             const [transferItem, setTransferItem] = useState(null);
-            
+
             // Sublist State
             const [sublists, setSublists] = useState([]); // All sublists for current inventory
             const [selectedSublistId, setSelectedSublistId] = useState(null); // null = Main List
@@ -4089,43 +4266,44 @@
             };
 
             const handleAddItemToSublist = async (sublistId, quantity = 1) => {
-                if (!itemToAddToSublist || !sublistId) return;
+                if (!itemToAddToSublist || !sublistId) {
+                    console.error("Missing item or sublist ID", { itemToAddToSublist, sublistId });
+                    return;
+                }
 
                 try {
-                    await addItemToSublist(sublistId, itemToAddToSublist.type, quantity);
-                    
-                    // Find which inventory this sublist belongs to
-                    const sublist = sublists.find(s => s.id === sublistId) || 
-                                   leftPanelSublists.find(s => s.id === sublistId) ||
-                                   rightPanelSublists.find(s => s.id === sublistId);
-                    
-                    if (sublist) {
-                        const inventoryId = sublist.inventoryId;
-                        
-                        // Reload sublists for the main view if it matches
-                        if (activeInventoryId === inventoryId) {
-                            const updatedSublists = await loadSublists(activeInventoryId);
-                            setSublists(updatedSublists);
-                        }
-                        
-                        // Reload sublists for left panel if it matches
-                        if (leftPanelInventoryId === inventoryId) {
-                            const updatedLeftSublists = await loadSublists(inventoryId);
-                            setLeftPanelSublists(updatedLeftSublists);
-                        }
-                        
-                        // Reload sublists for right panel if it matches
-                        if (rightPanelInventoryId === inventoryId) {
-                            const updatedRightSublists = await loadSublists(inventoryId);
-                            setRightPanelSublists(updatedRightSublists);
-                        }
+                    // Add item to sublist in database
+                    const updatedSublist = await addItemToSublist(sublistId, itemToAddToSublist.type, quantity);
+
+                    if (!updatedSublist) {
+                        throw new Error("Failed to update sublist");
                     }
-                    
+
+                    const inventoryId = updatedSublist.inventoryId;
+
+                    // Reload sublists for the main view if it matches
+                    if (activeInventoryId === inventoryId) {
+                        const updatedSublists = await loadSublists(activeInventoryId);
+                        setSublists(updatedSublists);
+                    }
+
+                    // Reload sublists for left panel if it matches
+                    if (leftPanelInventoryId === inventoryId) {
+                        const updatedLeftSublists = await loadSublists(inventoryId);
+                        setLeftPanelSublists(updatedLeftSublists);
+                    }
+
+                    // Reload sublists for right panel if it matches
+                    if (rightPanelInventoryId === inventoryId) {
+                        const updatedRightSublists = await loadSublists(inventoryId);
+                        setRightPanelSublists(updatedRightSublists);
+                    }
+
                     setShowAddToSublistModal(false);
                     setItemToAddToSublist(null);
                 } catch (e) {
                     console.error("Error adding item to sublist:", e);
-                    alert("Failed to add item to sublist");
+                    alert("Failed to add item to sublist: " + (e.message || "Unknown error"));
                 }
             };
 
@@ -4136,12 +4314,12 @@
                     ...(isSplitView ? leftPanelSublists : []),
                     ...(isSplitView ? rightPanelSublists : [])
                 ];
-                
+
                 // Remove duplicates by id
                 const uniqueSublists = Array.from(
                     new Map(allSublists.map(s => [s.id, s])).values()
                 );
-                
+
                 if (uniqueSublists.length === 0) {
                     alert("No sublists available. Create a sublist first from the tab context menu.");
                     return;
@@ -4188,20 +4366,36 @@
             };
 
             const handleExportInventory = () => {
+                // Clear any pending tab inventory ID so modal shows all inventories
+                setPendingExportTabInventoryId(null);
+                setPendingExportInventoryId(null);
                 setShowExportInventoryModal(true);
             };
 
-            const handleExportSpecificInventory = (inventoryId) => {
+            const handleExportSpecificInventory = async (inventoryId) => {
                 // Export a specific inventory by opening the export modal with it pre-selected
+                // Load sublists for this specific inventory
+                const inventorySublists = await loadSublists(inventoryId);
+                setSublists(inventorySublists);
+
                 setShowExportInventoryModal(true);
                 // Store the inventory ID to pre-select it in the modal
                 setPendingExportInventoryId(inventoryId);
+                // Store the tab inventory ID to filter the modal
+                setPendingExportTabInventoryId(inventoryId);
             };
 
-            const handleExportInventories = async (inventoryIds) => {
-                // TODO: Implement export for selected inventories
-                console.log("Exporting inventories:", inventoryIds);
-                // For now, just show export format modal
+            const handleExportInventories = async (inventoryIds, metadataOptions) => {
+                // Store metadata options for use in export format handler
+                setExportMetadataOptions(metadataOptions || {
+                    images: true,
+                    quantity: true,
+                    rarity: true,
+                    prices: true,
+                });
+                // Store selected inventory IDs for export
+                setPendingExportInventoryId(inventoryIds[0] || null);
+                // Close export inventory modal and show format selection
                 setShowExportInventoryModal(false);
                 setShowExportFormatModal(true);
             };
@@ -4295,7 +4489,7 @@
                         quantity
                     );
 
-                    // Reload items for both inventories if they're open
+                    // Reload items for main view if it matches source or target
                     if (
                         activeInventoryId === sourceInventoryId ||
                         activeInventoryId === targetInventoryId
@@ -4312,8 +4506,22 @@
                         }
                     }
 
-                    // If target inventory is also open, we might want to refresh it too
-                    // For now, just show success message
+                    // Reload items for split view panels if they match source or target
+                    if (isSplitView) {
+                        if (leftPanelInventoryId === sourceInventoryId || leftPanelInventoryId === targetInventoryId) {
+                            const leftItems = await loadInventoryItems(leftPanelInventoryId);
+                            setLeftPanelData(
+                                leftItems.map((d, i) => ({ ...d, actualIndex: i }))
+                            );
+                        }
+                        if (rightPanelInventoryId === sourceInventoryId || rightPanelInventoryId === targetInventoryId) {
+                            const rightItems = await loadInventoryItems(rightPanelInventoryId);
+                            setRightPanelData(
+                                rightItems.map((d, i) => ({ ...d, actualIndex: i }))
+                            );
+                        }
+                    }
+
                     alert(
                         `Transferred ${quantity} ${transferItem?.name || "item(s)"
                         } successfully!`
@@ -4340,13 +4548,13 @@
 
                     switch (format) {
                         case "csv":
-                            await exportToCSV(data, dateStr, imageBlobs);
+                            await exportToCSV(data, dateStr, imageBlobs, exportMetadataOptions);
                             break;
                         case "excel":
-                            await exportToExcel(data, dateStr, imageBlobs);
+                            await exportToExcel(data, dateStr, imageBlobs, exportMetadataOptions);
                             break;
                         case "pdf":
-                            await exportToPDF(data, dateStr, imageBlobs);
+                            await exportToPDF(data, dateStr, imageBlobs, exportMetadataOptions);
                             break;
                     }
                 } catch (e) {
@@ -4357,16 +4565,23 @@
                 }
             };
 
-            const exportToCSV = (data, dateStr, imageBlobs) => {
-                // Prepare CSV headers (no Image column)
-                const headers = ["Type", "Name", "Quantity", "Price", "Rarity"];
-                const rows = data.map((item) => [
-                    item.type || item.id || "",
-                    item.name || "",
-                    item.quantity || 0,
-                    item.price || 0,
-                    RARITY_MAP[item.rarity]?.label || "Common",
-                ]);
+            const exportToCSV = (data, dateStr, imageBlobs, metadataOptions = { images: true, quantity: true, rarity: true, prices: true }) => {
+                // Prepare CSV headers based on metadata options
+                const headers = ["Type", "Name"];
+                if (metadataOptions.quantity) headers.push("Quantity");
+                if (metadataOptions.prices) headers.push("Price");
+                if (metadataOptions.rarity) headers.push("Rarity");
+
+                const rows = data.map((item) => {
+                    const row = [
+                        item.type || item.id || "",
+                        item.name || "",
+                    ];
+                    if (metadataOptions.quantity) row.push(item.quantity || 0);
+                    if (metadataOptions.prices) row.push(item.price || 0);
+                    if (metadataOptions.rarity) row.push(RARITY_MAP[item.rarity]?.label || "Common");
+                    return row;
+                });
 
                 // Combine headers and rows
                 const csvContent = [
@@ -4403,21 +4618,37 @@
                 URL.revokeObjectURL(url);
             };
 
-            const exportToExcel = async (data, dateStr, imageBlobs) => {
+            const exportToExcel = async (data, dateStr, imageBlobs, metadataOptions = { images: true, quantity: true, rarity: true, prices: true }) => {
                 // Use ExcelJS for image support
                 const ExcelJS = window.ExcelJS;
                 const workbook = new ExcelJS.Workbook();
                 const worksheet = workbook.addWorksheet("Inventory");
 
-                // Set column headers
-                worksheet.columns = [
-                    { header: "Image", key: "image", width: 15 },
+                // Build column headers based on metadata options
+                const columns = [
                     { header: "Type", key: "type", width: 20 },
                     { header: "Name", key: "name", width: 30 },
-                    { header: "Quantity", key: "quantity", width: 10 },
-                    { header: "Price", key: "price", width: 12 },
-                    { header: "Rarity", key: "rarity", width: 15 },
                 ];
+                let colIndex = 2; // Start after Type and Name
+                let imageColIndex = -1;
+
+                if (metadataOptions.images) {
+                    columns.unshift({ header: "Image", key: "image", width: 15 });
+                    imageColIndex = 0;
+                    colIndex = 3; // Adjust after adding Image column
+                }
+                if (metadataOptions.quantity) {
+                    columns.push({ header: "Quantity", key: "quantity", width: 10 });
+                }
+                if (metadataOptions.prices) {
+                    columns.push({ header: "Price", key: "price", width: 12 });
+                }
+                if (metadataOptions.rarity) {
+                    columns.push({ header: "Rarity", key: "rarity", width: 15 });
+                }
+
+                // Set column headers
+                worksheet.columns = columns;
 
                 // Style header row
                 const headerRow = worksheet.getRow(1);
@@ -4430,73 +4661,107 @@
                 headerRow.alignment = { vertical: "middle", horizontal: "center" };
 
                 // Set column alignments
-                worksheet.getColumn(1).alignment = {
-                    vertical: "middle",
-                    horizontal: "center",
-                }; // Image
-                worksheet.getColumn(2).alignment = {
+                let currentCol = 0;
+                if (metadataOptions.images) {
+                    worksheet.getColumn(currentCol + 1).alignment = {
+                        vertical: "middle",
+                        horizontal: "center",
+                    }; // Image
+                    currentCol++;
+                }
+                worksheet.getColumn(currentCol + 1).alignment = {
                     vertical: "middle",
                     horizontal: "left",
                 }; // Type
-                worksheet.getColumn(3).alignment = {
+                currentCol++;
+                worksheet.getColumn(currentCol + 1).alignment = {
                     vertical: "middle",
                     horizontal: "left",
                 }; // Name
-                worksheet.getColumn(4).alignment = {
-                    vertical: "middle",
-                    horizontal: "center",
-                }; // Quantity
-                worksheet.getColumn(5).alignment = {
-                    vertical: "middle",
-                    horizontal: "right",
-                }; // Price
-                worksheet.getColumn(6).alignment = {
-                    vertical: "middle",
-                    horizontal: "center",
-                }; // Rarity
+                currentCol++;
+                if (metadataOptions.quantity) {
+                    worksheet.getColumn(currentCol + 1).alignment = {
+                        vertical: "middle",
+                        horizontal: "center",
+                    }; // Quantity
+                    currentCol++;
+                }
+                if (metadataOptions.prices) {
+                    worksheet.getColumn(currentCol + 1).alignment = {
+                        vertical: "middle",
+                        horizontal: "right",
+                    }; // Price
+                    currentCol++;
+                }
+                if (metadataOptions.rarity) {
+                    worksheet.getColumn(currentCol + 1).alignment = {
+                        vertical: "middle",
+                        horizontal: "center",
+                    }; // Rarity
+                    currentCol++;
+                }
 
                 // Add data rows with images
                 for (let i = 0; i < data.length; i++) {
                     const item = data[i];
-                    const row = worksheet.addRow({
+                    const rowData = {
                         type: item.type || item.id || "",
                         name: item.name || "",
-                        quantity: item.quantity || 0,
-                        price: item.price || 0,
-                        rarity: RARITY_MAP[item.rarity]?.label || "Common",
-                    });
+                    };
+                    if (metadataOptions.quantity) rowData.quantity = item.quantity || 0;
+                    if (metadataOptions.prices) rowData.price = item.price || 0;
+                    if (metadataOptions.rarity) rowData.rarity = RARITY_MAP[item.rarity]?.label || "Common";
+
+                    const row = worksheet.addRow(rowData);
 
                     // Set row height for images
-                    row.height = 60;
+                    if (metadataOptions.images) {
+                        row.height = 60;
+                    }
 
                     // Set alignment for each cell
-                    row.getCell(1).alignment = {
-                        vertical: "middle",
-                        horizontal: "center",
-                    }; // Image
-                    row.getCell(2).alignment = {
+                    let cellIndex = 1;
+                    if (metadataOptions.images) {
+                        row.getCell(cellIndex).alignment = {
+                            vertical: "middle",
+                            horizontal: "center",
+                        }; // Image
+                        cellIndex++;
+                    }
+                    row.getCell(cellIndex).alignment = {
                         vertical: "middle",
                         horizontal: "left",
                     }; // Type
-                    row.getCell(3).alignment = {
+                    cellIndex++;
+                    row.getCell(cellIndex).alignment = {
                         vertical: "middle",
                         horizontal: "left",
                     }; // Name
-                    row.getCell(4).alignment = {
-                        vertical: "middle",
-                        horizontal: "center",
-                    }; // Quantity
-                    row.getCell(5).alignment = {
-                        vertical: "middle",
-                        horizontal: "right",
-                    }; // Price
-                    row.getCell(6).alignment = {
-                        vertical: "middle",
-                        horizontal: "center",
-                    }; // Rarity
+                    cellIndex++;
+                    if (metadataOptions.quantity) {
+                        row.getCell(cellIndex).alignment = {
+                            vertical: "middle",
+                            horizontal: "center",
+                        }; // Quantity
+                        cellIndex++;
+                    }
+                    if (metadataOptions.prices) {
+                        row.getCell(cellIndex).alignment = {
+                            vertical: "middle",
+                            horizontal: "right",
+                        }; // Price
+                        cellIndex++;
+                    }
+                    if (metadataOptions.rarity) {
+                        row.getCell(cellIndex).alignment = {
+                            vertical: "middle",
+                            horizontal: "center",
+                        }; // Rarity
+                        cellIndex++;
+                    }
 
-                    // Add image if available
-                    if (item.image && imageBlobs.has(item.image)) {
+                    // Add image if available and images are enabled
+                    if (metadataOptions.images && item.image && imageBlobs.has(item.image)) {
                         try {
                             const imageBlob = imageBlobs.get(item.image);
 
@@ -4511,16 +4776,16 @@
                                 extension = "gif";
                             }
 
-                            // Add image to the first column (Image column)
+                            // Add image to the image column
                             const imageId = workbook.addImage({
                                 buffer: arrayBuffer,
                                 extension: extension,
                             });
 
-                            // Position image in the cell (column A, current row)
+                            // Position image in the cell
                             // Center the image in the cell
                             const imageSize = 50;
-                            const cellWidth = worksheet.getColumn(1).width || 15;
+                            const cellWidth = worksheet.getColumn(imageColIndex + 1).width || 15;
                             const cellHeight = row.height || 60;
 
                             // Calculate offset to center image (in Excel units: 1 col = ~64px, 1 row = ~20px)
@@ -4528,7 +4793,7 @@
                             const rowOffset = (cellHeight - imageSize) / 2 / 20; // Convert to row units
 
                             worksheet.addImage(imageId, {
-                                tl: { col: 0 + colOffset, row: i + 1 + rowOffset },
+                                tl: { col: imageColIndex + colOffset, row: i + 1 + rowOffset },
                                 ext: { width: imageSize, height: imageSize },
                             });
                         } catch (e) {
@@ -4553,7 +4818,7 @@
                 URL.revokeObjectURL(url);
             };
 
-            const exportToPDF = async (data, dateStr, imageBlobs) => {
+            const exportToPDF = async (data, dateStr, imageBlobs, metadataOptions = { images: true, quantity: true, rarity: true, prices: true }) => {
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF();
 
@@ -4564,7 +4829,7 @@
                 const startY = 20;
                 let currentY = startY;
                 const imageSize = 25; // Size for thumbnail images
-                const rowHeight = Math.max(8, imageSize + 4); // Adjust row height for images
+                const rowHeight = Math.max(8, metadataOptions.images ? imageSize + 4 : 8); // Adjust row height for images
                 const maxY = pageHeight - margin;
 
                 // Title
@@ -4578,12 +4843,37 @@
                 doc.text(`Exported: ${dateStr}`, margin, currentY);
                 currentY += 8;
 
+                // Build headers and column widths based on metadata options
+                const headers = [];
+                const colWidths = [];
+                let imageColWidth = 0;
+
+                if (metadataOptions.images) {
+                    headers.push("Image");
+                    colWidths.push(30);
+                    imageColWidth = 30;
+                }
+                headers.push("Type");
+                colWidths.push(25);
+                headers.push("Name");
+                colWidths.push(60);
+                if (metadataOptions.quantity) {
+                    headers.push("Qty");
+                    colWidths.push(15);
+                }
+                if (metadataOptions.prices) {
+                    headers.push("Price");
+                    colWidths.push(20);
+                }
+                if (metadataOptions.rarity) {
+                    headers.push("Rarity");
+                    colWidths.push(25);
+                }
+
                 // Table headers
                 doc.setFontSize(10);
                 doc.setTextColor(0, 0, 0);
                 doc.setFont(undefined, "bold");
-                const headers = ["Image", "Type", "Name", "Qty", "Price", "Rarity"];
-                const colWidths = [30, 25, 60, 15, 20, 25];
                 let xPos = margin;
 
                 headers.forEach((header, idx) => {
@@ -4611,8 +4901,8 @@
 
                     xPos = margin;
 
-                    // Add image if available
-                    if (item.image && imageBlobs.has(item.image)) {
+                    // Add image if available and images are enabled
+                    if (metadataOptions.images && item.image && imageBlobs.has(item.image)) {
                         try {
                             const imageBlob = imageBlobs.get(item.image);
                             const imageUrl = URL.createObjectURL(imageBlob);
@@ -4646,24 +4936,36 @@
                                 };
                                 reader.readAsDataURL(imageBlob);
                             });
+                            xPos += imageColWidth; // Move past image column
                         } catch (e) {
                             console.warn("Error processing image for PDF:", e);
+                            if (metadataOptions.images) {
+                                xPos += imageColWidth; // Move past image column even if image failed
+                            }
                         }
                     }
 
-                    xPos += colWidths[0]; // Move past image column
+                    // Build row data based on metadata options
+                    const rowData = [];
+                    let colWidthIndex = metadataOptions.images ? 1 : 0; // Start after image column if present
 
-                    const rowData = [
-                        (item.type || item.id || "").substring(0, 15),
-                        (item.name || "").substring(0, 25),
-                        String(item.quantity || 0),
-                        `$${item.price || 0}`,
-                        (RARITY_MAP[item.rarity]?.label || "Common").substring(0, 12),
-                    ];
+                    rowData.push((item.type || item.id || "").substring(0, 15));
+                    rowData.push((item.name || "").substring(0, 25));
+                    colWidthIndex += 2; // Type and Name are always present
+
+                    if (metadataOptions.quantity) {
+                        rowData.push(String(item.quantity || 0));
+                    }
+                    if (metadataOptions.prices) {
+                        rowData.push(`$${item.price || 0}`);
+                    }
+                    if (metadataOptions.rarity) {
+                        rowData.push((RARITY_MAP[item.rarity]?.label || "Common").substring(0, 12));
+                    }
 
                     rowData.forEach((cell, idx) => {
                         doc.text(cell, xPos, currentY);
-                        xPos += colWidths[idx + 1]; // +1 because we skipped image column
+                        xPos += colWidths[colWidthIndex + idx];
                     });
 
                     currentY += rowHeight;
@@ -4676,20 +4978,20 @@
             // Filter items based on selected sublist
             const displayItems = useMemo(() => {
                 const baseItems = searchResults || data || [];
-                
+
                 // If no sublist selected, show all items (Main List)
                 if (!selectedSublistId) {
                     return baseItems;
                 }
-                
+
                 // Find the selected sublist
                 const selectedSublist = sublists.find(s => s.id === selectedSublistId);
                 if (!selectedSublist || !selectedSublist.itemTypes || selectedSublist.itemTypes.length === 0) {
                     return [];
                 }
-                
+
                 // Filter items to only show those in the sublist
-                return baseItems.filter(item => 
+                return baseItems.filter(item =>
                     item.type && selectedSublist.itemTypes.includes(item.type)
                 );
             }, [searchResults, data, selectedSublistId, sublists]);
@@ -4697,9 +4999,9 @@
             // Filter left panel items based on selected sublist
             const leftPanelDisplayItems = useMemo(() => {
                 if (!leftPanelData) return [];
-                
+
                 let filtered = leftPanelData;
-                
+
                 // Filter by search query
                 if (leftPanelSearchQuery) {
                     filtered = filtered.filter(
@@ -4713,28 +5015,28 @@
                                     .includes(leftPanelSearchQuery.toLowerCase()))
                     );
                 }
-                
+
                 // Filter by selected sublist
                 if (leftPanelSelectedSublistId) {
                     const selectedSublist = leftPanelSublists.find(s => s.id === leftPanelSelectedSublistId);
                     if (selectedSublist && selectedSublist.itemTypes && selectedSublist.itemTypes.length > 0) {
-                        filtered = filtered.filter(item => 
+                        filtered = filtered.filter(item =>
                             item.type && selectedSublist.itemTypes.includes(item.type)
                         );
                     } else {
                         filtered = [];
                     }
                 }
-                
+
                 return filtered;
             }, [leftPanelData, leftPanelSearchQuery, leftPanelSelectedSublistId, leftPanelSublists]);
 
             // Filter right panel items based on selected sublist
             const rightPanelDisplayItems = useMemo(() => {
                 if (!rightPanelData) return [];
-                
+
                 let filtered = rightPanelData;
-                
+
                 // Filter by search query
                 if (rightPanelSearchQuery) {
                     filtered = filtered.filter(
@@ -4748,19 +5050,19 @@
                                     .includes(rightPanelSearchQuery.toLowerCase()))
                     );
                 }
-                
+
                 // Filter by selected sublist
                 if (rightPanelSelectedSublistId) {
                     const selectedSublist = rightPanelSublists.find(s => s.id === rightPanelSelectedSublistId);
                     if (selectedSublist && selectedSublist.itemTypes && selectedSublist.itemTypes.length > 0) {
-                        filtered = filtered.filter(item => 
+                        filtered = filtered.filter(item =>
                             item.type && selectedSublist.itemTypes.includes(item.type)
                         );
                     } else {
                         filtered = [];
                     }
                 }
-                
+
                 return filtered;
             }, [rightPanelData, rightPanelSearchQuery, rightPanelSelectedSublistId, rightPanelSublists]);
 
@@ -5048,8 +5350,8 @@
                                     <span className="text-[10px] text-slate-500 uppercase font-bold mr-2">
                                         View:
                                     </span>
-                                    <select 
-                                        value={selectedSublistId || ""} 
+                                    <select
+                                        value={selectedSublistId || ""}
                                         onChange={(e) => setSelectedSublistId(e.target.value || null)}
                                         className="bg-transparent text-xs text-slate-300 outline-none hover:text-white cursor-pointer"
                                     >
@@ -5148,8 +5450,8 @@
                                             <span className="text-[10px] text-slate-500 uppercase font-bold mr-2">
                                                 View:
                                             </span>
-                                            <select 
-                                                value={leftPanelSelectedSublistId || ""} 
+                                            <select
+                                                value={leftPanelSelectedSublistId || ""}
                                                 onChange={(e) => setLeftPanelSelectedSublistId(e.target.value || null)}
                                                 className="bg-transparent text-xs text-slate-300 outline-none hover:text-white cursor-pointer"
                                             >
@@ -5239,8 +5541,8 @@
                                             <span className="text-[10px] text-slate-500 uppercase font-bold mr-2">
                                                 View:
                                             </span>
-                                            <select 
-                                                value={rightPanelSelectedSublistId || ""} 
+                                            <select
+                                                value={rightPanelSelectedSublistId || ""}
                                                 onChange={(e) => setRightPanelSelectedSublistId(e.target.value || null)}
                                                 className="bg-transparent text-xs text-slate-300 outline-none hover:text-white cursor-pointer"
                                             >
@@ -5369,9 +5671,12 @@
                         onClose={() => {
                             setShowExportInventoryModal(false);
                             setPendingExportInventoryId(null);
+                            setPendingExportTabInventoryId(null);
                         }}
                         preSelectedId={pendingExportInventoryId}
+                        tabInventoryId={pendingExportTabInventoryId}
                         inventories={inventories}
+                        sublists={sublists}
                         onExport={handleExportInventories}
                     />
 
@@ -5382,8 +5687,9 @@
                             setTransferItem(null);
                         }}
                         item={transferItem}
-                        sourceInventoryId={activeInventoryId}
+                        sourceInventoryId={transferItem?.inventoryId || activeInventoryId}
                         inventories={inventories}
+                        imageMap={imageMap}
                         onTransfer={handleTransfer}
                     />
 
@@ -5403,10 +5709,11 @@
                             ...sublists,
                             ...(isSplitView ? leftPanelSublists : []),
                             ...(isSplitView ? rightPanelSublists : [])
-                        ].filter((s, index, self) => 
+                        ].filter((s, index, self) =>
                             index === self.findIndex(t => t.id === s.id)
                         )}
                         item={itemToAddToSublist}
+                        imageMap={imageMap}
                         onAdd={handleAddItemToSublist}
                     />
 
