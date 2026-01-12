@@ -1614,7 +1614,7 @@
                             Export Inventory
                         </h3>
                         <p className="text-sm text-slate-400 mb-4">
-                            Select inventory(s) to export
+                            Select export items
                         </p>
 
                         <div className="space-y-2 mb-6">
@@ -4399,7 +4399,9 @@
                     const leftId =
                         activeInventoryId ||
                         (inventories.length > 0 ? inventories[0].id : null);
-                    const rightId = inventories.length > 1 ? inventories[1].id : leftId;
+                    
+                    // CHANGE THIS LINE: Set rightId to match leftId
+                    const rightId = leftId; 
 
                     setLeftPanelInventoryId(leftId);
                     setRightPanelInventoryId(rightId);
@@ -5195,7 +5197,7 @@
                                         handleToggleSplitView();
                                         if (!rightPanelInventoryId && inventories.length > 1) {
                                             const otherInventory = inventories.find(
-                                                (i) => i.id !== activeInventoryId
+                                                (i) => i.id === activeInventoryId
                                             );
                                             if (otherInventory) {
                                                 handleRightPanelInventoryChange(otherInventory.id);
