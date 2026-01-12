@@ -162,8 +162,8 @@
       );
       const Settings = (props) => (
         <IconBase {...props}>
-          <circle cx="12" cy="12" r="3" />
-          <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24" />
+          <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
+          <path d="M19.43 12.97c.04-.32.07-.64.07-.97s-.03-.65-.07-.97l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.06-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.63.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64L4.57 11c-.04.32-.07.65-.07.97s.03.65.07.97l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.06.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.63-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z" />
         </IconBase>
       );
       const RefreshCw = (props) => (
@@ -940,13 +940,24 @@
         try {
           const db = await openDB();
           const tx = db.transaction(
-            [STORE_ITEMS, STORE_IMAGES, STORE_METADATA, STORE_EMBEDDINGS],
+            [
+              STORE_ITEMS,
+              STORE_IMAGES,
+              STORE_METADATA,
+              STORE_EMBEDDINGS,
+              STORE_INVENTORIES,
+              STORE_INVENTORY_ITEMS,
+              STORE_SUBLISTS,
+            ],
             "readwrite"
           );
           await tx.objectStore(STORE_ITEMS).clear();
           await tx.objectStore(STORE_IMAGES).clear();
           await tx.objectStore(STORE_METADATA).clear();
           await tx.objectStore(STORE_EMBEDDINGS).clear();
+          await tx.objectStore(STORE_INVENTORIES).clear();
+          await tx.objectStore(STORE_INVENTORY_ITEMS).clear();
+          await tx.objectStore(STORE_SUBLISTS).clear();
           await new Promise((resolve, reject) => {
             tx.oncomplete = () => resolve();
             tx.onerror = () => reject(tx.error);
@@ -1163,7 +1174,7 @@
       };
 
       // Settings Menu Component
-      const SettingsMenu = ({ onDeleteInventory, activeInventoryName }) => {
+      const SettingsMenu = ({ onClearManager, activeInventoryName }) => {
         const [isOpen, setIsOpen] = useState(false);
         const menuRef = useRef(null);
 
@@ -1196,12 +1207,12 @@
               <div className="absolute right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden">
                 <button
                   onClick={() => {
-                    onDeleteInventory();
+                    onClearManager();
                     setIsOpen(false);
                   }}
                   className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-slate-700 transition-colors"
                 >
-                  Delete Inventory
+                  Clear Manager
                 </button>
               </div>
             )}
@@ -4060,6 +4071,10 @@
           setEmbeddings(null);
           setIndexingProgress(0);
           setSearchQuery("");
+          setInventories([]);
+          setActiveInventoryId(null);
+          setOpenInventoryIds([]);
+          setSublists([]);
           await clearIndexedDB();
         };
 
@@ -4418,41 +4433,8 @@
           setShowAddToSublistModal(true);
         };
 
-        const handleDeleteInventory = async () => {
-          if (!activeInventoryId) return;
-          const activeInventory = inventories.find(
-            (inv) => inv.id === activeInventoryId
-          );
-          if (!activeInventory) return;
-
-          const confirmed = confirm(
-            `Are you sure you want to delete "${activeInventory.name}"? This cannot be undone.`
-          );
-          if (!confirmed) return;
-
-          try {
-            await deleteInventory(activeInventoryId);
-            const updatedInventories = await loadInventories();
-            setInventories(updatedInventories);
-
-            // Remove from open tabs
-            setOpenInventoryIds((prev) =>
-              prev.filter((id) => id !== activeInventoryId)
-            );
-
-            // Switch to another inventory if available
-            if (updatedInventories.length > 0) {
-              const nextInventory = updatedInventories[0];
-              await handleOpenInventoryTab(nextInventory.id);
-            } else {
-              setActiveInventoryId(null);
-              setData([]);
-              setHasStoredData(false);
-            }
-          } catch (e) {
-            console.error("Error deleting inventory:", e);
-            alert("Failed to delete inventory: " + e.message);
-          }
+        const handleClearManager = () => {
+          setShowFirstClearModal(true);
         };
 
         const handleExportInventory = () => {
@@ -5325,7 +5307,7 @@
                     onExportInventory={handleExportInventory}
                   />
                   <SettingsMenu
-                    onDeleteInventory={handleDeleteInventory}
+                    onClearManager={handleClearManager}
                     activeInventoryName={activeInventory?.name}
                   />
                 </div>
@@ -5812,7 +5794,7 @@
             <Modal
               isOpen={showFirstClearModal}
               onClose={() => setShowFirstClearModal(false)}
-              title="Delete Inventory?"
+              title="Clear Manager?"
               message="This will clear your inventory manager. Make sure you have already saved a copy to your Desktop."
               onConfirm={handleFirstClearConfirm}
               confirmText="Next"
@@ -5823,7 +5805,7 @@
               isOpen={showSecondClearModal}
               onClose={() => setShowSecondClearModal(false)}
               title="Confirm"
-              message="Are you sure u want to clear your inventory manager?"
+              message="Are you sure you want to clear your inventory manager? This cannot be undone!"
               onConfirm={handleSecondClearConfirm}
               confirmText="Confirm"
               cancelText="Cancel"
