@@ -1138,7 +1138,7 @@
                                 }}
                                 className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
                             >
-                                New Inventory...
+                                New Inventory
                             </button>
                             <button
                                 onClick={() => {
@@ -1147,17 +1147,9 @@
                                 }}
                                 className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
                             >
-                                Open Inventory...
+                                Open Inventory
                             </button>
-                            <button
-                                onClick={() => {
-                                    onExportInventory();
-                                    setIsOpen(false);
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
-                            >
-                                Export Inventory...
-                            </button>
+
                         </div>
                     )}
                 </div>
@@ -2319,6 +2311,7 @@
                 onContextMenuClose,
                 onTransferItem,
                 onAddToSublist,
+                isSublist,
             }) => {
                 const imageUrl = imageMap.get(item.image);
                 const rarityStyle = RARITY_MAP[item.rarity] || RARITY_MAP[0];
@@ -2365,7 +2358,7 @@
                     }
                     e.target.value = "";
                 };
-
+                console.log('@',isSublist);
                 return (
                     <>
                         <div
@@ -2424,93 +2417,116 @@
                                 </div>
                             </div>
 
+                            {/* Quantity Column */}
                             <div className="w-28 px-2">
                                 <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">
                                     Qty
                                 </label>
-                                <input
-                                    type="number"
-                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 focus:outline-none text-right text-slate-200 transition-all"
-                                    value={item.quantity}
-                                    min="0"
-                                    onChange={(e) =>
-                                        onUpdate(
-                                            item.actualIndex,
-                                            "quantity",
-                                            parseInt(e.target.value) || 0
-                                        )
-                                    }
-                                    onBlur={(e) =>
-                                        onUpdate(
-                                            item.actualIndex,
-                                            "quantity",
-                                            parseInt(e.target.value) || 0,
-                                            true
-                                        )
-                                    }
-                                />
+                                {isSublist ? (
+                                    <div className="w-full px-2 py-1.5 text-sm text-right text-slate-400 font-medium">
+                                        {item.quantity}
+                                    </div>
+                                ) : (
+                                    <input
+                                        type="number"
+                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 focus:outline-none text-right text-slate-200 transition-all"
+                                        value={item.quantity}
+                                        min="0"
+                                        onChange={(e) =>
+                                            onUpdate(
+                                                item.actualIndex,
+                                                "quantity",
+                                                parseInt(e.target.value) || 0
+                                            )
+                                        }
+                                        onBlur={(e) =>
+                                            onUpdate(
+                                                item.actualIndex,
+                                                "quantity",
+                                                parseInt(e.target.value) || 0,
+                                                true
+                                            )
+                                        }
+                                    />
+                                )}
                             </div>
 
                             <div className="w-32 px-2">
                                 <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">
                                     Price
                                 </label>
-                                <div className="relative">
-                                    <span className="absolute left-2 top-1.5 text-slate-500 text-sm">
-                                        $
-                                    </span>
-                                    <input
-                                        type="number"
-                                        className="w-full bg-slate-900 border border-slate-700 rounded pl-5 pr-2 py-1.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 focus:outline-none text-right text-slate-200 transition-all"
-                                        value={item.price}
-                                        placeholder="0"
-                                        min="0"
-                                        onChange={(e) =>
-                                            onUpdate(
-                                                item.actualIndex,
-                                                "price",
-                                                parseFloat(e.target.value) || 0
-                                            )
-                                        }
-                                        onBlur={(e) =>
-                                            onUpdate(
-                                                item.actualIndex,
-                                                "price",
-                                                parseFloat(e.target.value) || 0,
-                                                true
-                                            )
-                                        }
-                                    />
-                                </div>
+                                {isSublist ? (
+                                    <div className="w-full px-2 py-1.5 text-sm text-right text-slate-400 font-medium">
+                                        <span className="text-slate-600 mr-1">$</span>
+                                        {item.price}
+                                    </div>
+                                ) : (
+                                    <div className="relative">
+                                        <span className="absolute left-2 top-1.5 text-slate-500 text-sm">
+                                            $
+                                        </span>
+                                        <input
+                                            type="number"
+                                            className="w-full bg-slate-900 border border-slate-700 rounded pl-5 pr-2 py-1.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 focus:outline-none text-right text-slate-200 transition-all"
+                                            value={item.price}
+                                            placeholder="0"
+                                            min="0"
+                                            onChange={(e) =>
+                                                onUpdate(
+                                                    item.actualIndex,
+                                                    "price",
+                                                    parseFloat(e.target.value) || 0
+                                                )
+                                            }
+                                            onBlur={(e) =>
+                                                onUpdate(
+                                                    item.actualIndex,
+                                                    "price",
+                                                    parseFloat(e.target.value) || 0,
+                                                    true
+                                                )
+                                            }
+                                        />
+                                    </div>
+                                )}
                             </div>
 
                             <div className="w-36 px-2">
                                 <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">
                                     Rarity
                                 </label>
-                                <select
-                                    className={`w-full border rounded px-2 py-1.5 text-xs font-medium focus:outline-none appearance-none cursor-pointer transition-all ${rarityStyle.color
-                                        } ${rarityStyle.bg || "bg-slate-900"}`}
-                                    value={item.rarity}
-                                    onChange={(e) =>
-                                        onUpdate(
-                                            item.actualIndex,
-                                            "rarity",
-                                            parseInt(e.target.value),
-                                            true
-                                        )
-                                    }
-                                >
-                                    {Object.entries(RARITY_MAP).map(([val, config]) => (
-                                        <option
-                                            key={val}
-                                            value={val}
-                                            className="bg-slate-800 text-slate-200"
-                                        >
-                                            {config.label}
-                                        </option>
-                                    ))}
-                                </select>
+                                {isSublist ? (
+                                    <div
+                                        className={`w-full border border-transparent rounded px-2 py-1.5 text-xs font-medium text-center ${rarityStyle.color} ${rarityStyle.bg || "bg-slate-900"
+                                            }`}
+                                    >
+                                        {RARITY_MAP[item.rarity]?.label || "Common"}
+                                    </div>
+                                ) : (
+                                    <select
+                                        className={`w-full border rounded px-2 py-1.5 text-xs font-medium focus:outline-none appearance-none cursor-pointer transition-all ${rarityStyle.color
+                                            } ${rarityStyle.bg || "bg-slate-900"}`}
+                                        value={item.rarity}
+                                        onChange={(e) =>
+                                            onUpdate(
+                                                item.actualIndex,
+                                                "rarity",
+                                                parseInt(e.target.value),
+                                                true
+                                            )
+                                        }
+                                    >
+                                        {Object.entries(RARITY_MAP).map(([val, config]) => (
+                                            <option
+                                                key={val}
+                                                value={val}
+                                                className="bg-slate-800 text-slate-200"
+                                            >
+                                                {config.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
                             </div>
                         </div>
                         {isContextMenuOpen && (
@@ -2600,6 +2616,7 @@
             onReplaceImage,
             onTransferItem,
             onAddToSublist,
+            isSublist,
         }) => {
             const containerRef = useRef(null);
             const [scrollTop, setScrollTop] = useState(0);
@@ -2703,6 +2720,7 @@
                             onContextMenuClose={handleContextMenuClose}
                             onTransferItem={onTransferItem}
                             onAddToSublist={onAddToSublist}
+                            isSublist={isSublist}
                         />
                     );
                 }
@@ -2716,6 +2734,7 @@
                 onReplaceImage,
                 contextMenu,
                 onAddToSublist,
+                isSublist
             ]);
 
             return (
@@ -5399,6 +5418,7 @@
                                             onReplaceImage={handleReplaceImage}
                                             onTransferItem={handleTransferItem}
                                             onAddToSublist={handleAddToSublistClick}
+                                            isSublist={!!selectedSublistId}
                                         />
                                     </>
                                 )}
