@@ -209,6 +209,22 @@
                 <polyline points="10 9 9 9 8 9" />
             </IconBase>
         );
+        const Plus = (props) => (
+            <IconBase {...props}>
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+            </IconBase>
+        );
+        const List = (props) => (
+            <IconBase {...props}>
+                <line x1="8" y1="6" x2="21" y2="6" />
+                <line x1="8" y1="12" x2="21" y2="12" />
+                <line x1="8" y1="18" x2="21" y2="18" />
+                <line x1="3" y1="6" x2="3.01" y2="6" />
+                <line x1="3" y1="12" x2="3.01" y2="12" />
+                <line x1="3" y1="18" x2="3.01" y2="18" />
+            </IconBase>
+        );
 
         // --- Constants & Helpers ---
 
@@ -354,6 +370,94 @@
                 return inventory;
             } catch (e) {
                 console.error("Error creating inventory:", e);
+                throw e;
+            }
+        }
+
+        async function loadSublists(inventoryId) {
+            try {
+                const db = await openDB();
+                const tx = db.transaction([STORE_SUBLISTS], "readonly");
+                const sublistsStore = tx.objectStore(STORE_SUBLISTS);
+                const sublistsIndex = sublistsStore.index("inventoryId");
+
+                const sublists = await new Promise((resolve, reject) => {
+                    const req = sublistsIndex.getAll(inventoryId);
+                    req.onsuccess = () => resolve(req.result || []);
+                    req.onerror = () => reject(req.error);
+                });
+
+                return sublists;
+            } catch (e) {
+                console.error("Error loading sublists:", e);
+                return [];
+            }
+        }
+
+        async function saveSublist(sublist) {
+            try {
+                const db = await openDB();
+                const tx = db.transaction([STORE_SUBLISTS], "readwrite");
+                const sublistsStore = tx.objectStore(STORE_SUBLISTS);
+
+                const sublistToSave = {
+                    ...sublist,
+                    updatedAt: Date.now(),
+                };
+
+                if (!sublistToSave.id) {
+                    sublistToSave.id = `sublist_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                    sublistToSave.createdAt = Date.now();
+                }
+
+                await new Promise((resolve, reject) => {
+                    const req = sublistsStore.put(sublistToSave);
+                    req.onsuccess = () => resolve(sublistToSave);
+                    req.onerror = () => reject(req.error);
+                });
+
+                return sublistToSave;
+            } catch (e) {
+                console.error("Error saving sublist:", e);
+                throw e;
+            }
+        }
+
+        async function addItemToSublist(sublistId, itemType, quantity = 1) {
+            try {
+                const db = await openDB();
+                const tx = db.transaction([STORE_SUBLISTS], "readwrite");
+                const sublistsStore = tx.objectStore(STORE_SUBLISTS);
+
+                const sublist = await new Promise((resolve, reject) => {
+                    const req = sublistsStore.get(sublistId);
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+
+                if (!sublist) {
+                    throw new Error("Sublist not found");
+                }
+
+                // Update sublist - add item type if not already present
+                if (!sublist.itemTypes) {
+                    sublist.itemTypes = [];
+                }
+                if (!sublist.itemTypes.includes(itemType)) {
+                    sublist.itemTypes.push(itemType);
+                }
+
+                sublist.updatedAt = Date.now();
+
+                await new Promise((resolve, reject) => {
+                    const req = sublistsStore.put(sublist);
+                    req.onsuccess = () => resolve(sublist);
+                    req.onerror = () => reject(req.error);
+                });
+
+                return sublist;
+            } catch (e) {
+                console.error("Error adding item to sublist:", e);
                 throw e;
             }
         }
@@ -1133,8 +1237,8 @@
                         <div
                             key={inv.id}
                             className={`flex items-center gap-2 px-4 py-2 rounded-t-lg cursor-pointer transition-colors ${activeInventoryId === inv.id
-                                    ? "bg-slate-800 border-t border-l border-r border-slate-700"
-                                    : "bg-slate-900 hover:bg-slate-800"
+                                ? "bg-slate-800 border-t border-l border-r border-slate-700"
+                                : "bg-slate-900 hover:bg-slate-800"
                                 }`}
                             onClick={() => onTabClick(inv.id)}
                         >
@@ -1324,6 +1428,152 @@
                                 className="px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
                             >
                                 Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // New Sublist Modal
+        const NewSublistModal = ({
+            isOpen,
+            onClose,
+            onCreate,
+        }) => {
+            const [name, setName] = useState("");
+
+            useEffect(() => {
+                if (isOpen) {
+                    setName("");
+                }
+            }, [isOpen]);
+
+            if (!isOpen) return null;
+
+            const handleCreate = () => {
+                if (name.trim()) {
+                    onCreate(name.trim());
+                    setName("");
+                }
+            };
+
+            return (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+                    onClick={onClose}
+                >
+                    <div
+                        className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-lg font-semibold text-slate-200 mb-4">
+                            New Sublist
+                        </h3>
+                        <div className="mb-4">
+                            <label className="block text-sm text-slate-400 mb-2">
+                                Sublist Name
+                            </label>
+                            <input
+                                type="text"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                placeholder="Enter sublist name"
+                                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                autoFocus
+                                onKeyPress={(e) => e.key === "Enter" && handleCreate()}
+                            />
+                        </div>
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={onClose}
+                                className="px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleCreate}
+                                disabled={!name.trim()}
+                                className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Create Sublist
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Add to Sublist Modal
+        const AddToSublistModal = ({
+            isOpen,
+            onClose,
+            sublists,
+            item,
+            onAdd,
+        }) => {
+            const [selectedSublistId, setSelectedSublistId] = useState("");
+
+            useEffect(() => {
+                if (isOpen && item) {
+                    setSelectedSublistId("");
+                }
+            }, [isOpen, item]);
+
+            if (!isOpen || !item) return null;
+
+            const handleAdd = () => {
+                if (selectedSublistId) {
+                    onAdd(selectedSublistId, 1);
+                }
+            };
+
+            return (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+                    onClick={onClose}
+                >
+                    <div
+                        className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-lg font-semibold text-slate-200 mb-4">
+                            Add to Sublist
+                        </h3>
+                        <div className="mb-4">
+                            <div className="px-4 py-2 bg-slate-800 rounded-lg mb-4">
+                                <div className="text-sm font-medium text-slate-300">{item.name}</div>
+                                <div className="text-xs text-slate-500 mt-1">{item.type}</div>
+                            </div>
+                            <label className="block text-sm text-slate-400 mb-2">
+                                Select Sublist
+                            </label>
+                            <select
+                                value={selectedSublistId}
+                                onChange={(e) => setSelectedSublistId(e.target.value)}
+                                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="">-- Select a sublist --</option>
+                                {sublists.map((sublist) => (
+                                    <option key={sublist.id} value={sublist.id}>
+                                        {sublist.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={onClose}
+                                className="px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleAdd}
+                                disabled={!selectedSublistId}
+                                className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Add
                             </button>
                         </div>
                     </div>
@@ -1929,6 +2179,7 @@
                 onContextMenuOpen,
                 onContextMenuClose,
                 onTransferItem,
+                onAddToSublist,
             }) => {
                 const imageUrl = imageMap.get(item.image);
                 const rarityStyle = RARITY_MAP[item.rarity] || RARITY_MAP[0];
@@ -2170,6 +2421,18 @@
                                         Transfer to...
                                     </button>
                                 )}
+                                {onAddToSublist && (
+                                    <button
+                                        onClick={() => {
+                                            onContextMenuClose();
+                                            onAddToSublist(item);
+                                        }}
+                                        className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors flex items-center gap-2"
+                                    >
+                                        <List className="w-4 h-4" />
+                                        Add to sublist
+                                    </button>
+                                )}
                                 <button
                                     onClick={handleReplaceImage}
                                     className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors flex items-center gap-2"
@@ -2197,6 +2460,7 @@
             onUpdateItem,
             onReplaceImage,
             onTransferItem,
+            onAddToSublist,
         }) => {
             const containerRef = useRef(null);
             const [scrollTop, setScrollTop] = useState(0);
@@ -2268,6 +2532,7 @@
                             onContextMenuOpen={handleContextMenuOpen}
                             onContextMenuClose={handleContextMenuClose}
                             onTransferItem={onTransferItem}
+                            onAddToSublist={onAddToSublist}
                         />
                     );
                 }
@@ -2280,6 +2545,7 @@
                 onUpdateItem,
                 onReplaceImage,
                 contextMenu,
+                onAddToSublist,
             ]);
 
             return (
@@ -2332,6 +2598,10 @@
             const [rightPanelData, setRightPanelData] = useState(null);
             const [leftPanelSearchQuery, setLeftPanelSearchQuery] = useState("");
             const [rightPanelSearchQuery, setRightPanelSearchQuery] = useState("");
+            const [leftPanelSublists, setLeftPanelSublists] = useState([]);
+            const [rightPanelSublists, setRightPanelSublists] = useState([]);
+            const [leftPanelSelectedSublistId, setLeftPanelSelectedSublistId] = useState(null);
+            const [rightPanelSelectedSublistId, setRightPanelSelectedSublistId] = useState(null);
 
             // AI State
             const [pipeline, setPipeline] = useState(null);
@@ -2365,6 +2635,13 @@
             const [showSettingsMenu, setShowSettingsMenu] = useState(false);
             const [showTransferModal, setShowTransferModal] = useState(false);
             const [transferItem, setTransferItem] = useState(null);
+            
+            // Sublist State
+            const [sublists, setSublists] = useState([]); // All sublists for current inventory
+            const [selectedSublistId, setSelectedSublistId] = useState(null); // null = Main List
+            const [showNewSublistModal, setShowNewSublistModal] = useState(false);
+            const [showAddToSublistModal, setShowAddToSublistModal] = useState(false);
+            const [itemToAddToSublist, setItemToAddToSublist] = useState(null);
 
             // File input ref for update inventory
             const updateInventoryInputRef = useRef(null);
@@ -2398,6 +2675,11 @@
                                 setData([]);
                                 setHasStoredData(false);
                             }
+
+                            // Load sublists for first inventory
+                            const loadedSublists = await loadSublists(firstInventory.id);
+                            setSublists(loadedSublists);
+                            setSelectedSublistId(null);
 
                             // Load images (shared)
                             const loadedImageMap = await getImagesFromIndexedDB();
@@ -2646,8 +2928,8 @@
             useEffect(() => {
                 const handleClickOutside = (event) => {
                     // Don't close if clicking on the menu button or the menu itself
-                    if (openTabMenuId !== null && 
-                        !event.target.closest('.tab-menu-button') && 
+                    if (openTabMenuId !== null &&
+                        !event.target.closest('.tab-menu-button') &&
                         !event.target.closest('.tab-context-menu')) {
                         setOpenTabMenuId(null);
                     }
@@ -3742,6 +4024,11 @@
                     setData([]);
                     setHasStoredData(false);
                 }
+
+                // Load sublists for this inventory
+                const loadedSublists = await loadSublists(inventoryId);
+                setSublists(loadedSublists);
+                setSelectedSublistId(null); // Reset to Main List
             };
 
             const handleTabClick = async (inventoryId) => {
@@ -3755,6 +4042,11 @@
                     setData([]);
                     setHasStoredData(false);
                 }
+
+                // Load sublists for this inventory
+                const loadedSublists = await loadSublists(inventoryId);
+                setSublists(loadedSublists);
+                setSelectedSublistId(null); // Reset to Main List
             };
 
             const handleTabClose = (inventoryId) => {
@@ -3774,6 +4066,88 @@
                         handleTabClick(remainingIds[0]);
                     }
                 }
+            };
+
+            const handleCreateSublist = async (name, type) => {
+                if (!activeInventoryId || !name.trim()) return;
+
+                try {
+                    const newSublist = {
+                        inventoryId: activeInventoryId,
+                        name: name.trim(),
+                        itemTypes: [],
+                    };
+
+                    const savedSublist = await saveSublist(newSublist);
+                    const updatedSublists = await loadSublists(activeInventoryId);
+                    setSublists(updatedSublists);
+                    setShowNewSublistModal(false);
+                } catch (e) {
+                    console.error("Error creating sublist:", e);
+                    alert("Failed to create sublist");
+                }
+            };
+
+            const handleAddItemToSublist = async (sublistId, quantity = 1) => {
+                if (!itemToAddToSublist || !sublistId) return;
+
+                try {
+                    await addItemToSublist(sublistId, itemToAddToSublist.type, quantity);
+                    
+                    // Find which inventory this sublist belongs to
+                    const sublist = sublists.find(s => s.id === sublistId) || 
+                                   leftPanelSublists.find(s => s.id === sublistId) ||
+                                   rightPanelSublists.find(s => s.id === sublistId);
+                    
+                    if (sublist) {
+                        const inventoryId = sublist.inventoryId;
+                        
+                        // Reload sublists for the main view if it matches
+                        if (activeInventoryId === inventoryId) {
+                            const updatedSublists = await loadSublists(activeInventoryId);
+                            setSublists(updatedSublists);
+                        }
+                        
+                        // Reload sublists for left panel if it matches
+                        if (leftPanelInventoryId === inventoryId) {
+                            const updatedLeftSublists = await loadSublists(inventoryId);
+                            setLeftPanelSublists(updatedLeftSublists);
+                        }
+                        
+                        // Reload sublists for right panel if it matches
+                        if (rightPanelInventoryId === inventoryId) {
+                            const updatedRightSublists = await loadSublists(inventoryId);
+                            setRightPanelSublists(updatedRightSublists);
+                        }
+                    }
+                    
+                    setShowAddToSublistModal(false);
+                    setItemToAddToSublist(null);
+                } catch (e) {
+                    console.error("Error adding item to sublist:", e);
+                    alert("Failed to add item to sublist");
+                }
+            };
+
+            const handleAddToSublistClick = (item) => {
+                // Collect all sublists from main view and both panels
+                const allSublists = [
+                    ...sublists,
+                    ...(isSplitView ? leftPanelSublists : []),
+                    ...(isSplitView ? rightPanelSublists : [])
+                ];
+                
+                // Remove duplicates by id
+                const uniqueSublists = Array.from(
+                    new Map(allSublists.map(s => [s.id, s])).values()
+                );
+                
+                if (uniqueSublists.length === 0) {
+                    alert("No sublists available. Create a sublist first from the tab context menu.");
+                    return;
+                }
+                setItemToAddToSublist(item);
+                setShowAddToSublistModal(true);
             };
 
             const handleDeleteInventory = async () => {
@@ -3857,12 +4231,20 @@
                         setLeftPanelData(
                             leftItems.map((d, i) => ({ ...d, actualIndex: i }))
                         );
+                        // Load sublists for left panel
+                        const leftSublists = await loadSublists(leftId);
+                        setLeftPanelSublists(leftSublists);
+                        setLeftPanelSelectedSublistId(null);
                     }
                     if (rightId) {
                         const rightItems = await loadInventoryItems(rightId);
                         setRightPanelData(
                             rightItems.map((d, i) => ({ ...d, actualIndex: i }))
                         );
+                        // Load sublists for right panel
+                        const rightSublists = await loadSublists(rightId);
+                        setRightPanelSublists(rightSublists);
+                        setRightPanelSelectedSublistId(null);
                     }
                 } else {
                     // Exiting split view - restore to active inventory
@@ -3878,12 +4260,20 @@
                 setLeftPanelInventoryId(inventoryId);
                 const items = await loadInventoryItems(inventoryId);
                 setLeftPanelData(items.map((d, i) => ({ ...d, actualIndex: i })));
+                // Load sublists for left panel
+                const leftSublists = await loadSublists(inventoryId);
+                setLeftPanelSublists(leftSublists);
+                setLeftPanelSelectedSublistId(null);
             };
 
             const handleRightPanelInventoryChange = async (inventoryId) => {
                 setRightPanelInventoryId(inventoryId);
                 const items = await loadInventoryItems(inventoryId);
                 setRightPanelData(items.map((d, i) => ({ ...d, actualIndex: i })));
+                // Load sublists for right panel
+                const rightSublists = await loadSublists(inventoryId);
+                setRightPanelSublists(rightSublists);
+                setRightPanelSelectedSublistId(null);
             };
 
             const handleTransferItem = (item) => {
@@ -4283,7 +4673,96 @@
                 doc.save(`my_vmk_furniture_${dateStr}.pdf`);
             };
 
-            const displayItems = searchResults || data;
+            // Filter items based on selected sublist
+            const displayItems = useMemo(() => {
+                const baseItems = searchResults || data || [];
+                
+                // If no sublist selected, show all items (Main List)
+                if (!selectedSublistId) {
+                    return baseItems;
+                }
+                
+                // Find the selected sublist
+                const selectedSublist = sublists.find(s => s.id === selectedSublistId);
+                if (!selectedSublist || !selectedSublist.itemTypes || selectedSublist.itemTypes.length === 0) {
+                    return [];
+                }
+                
+                // Filter items to only show those in the sublist
+                return baseItems.filter(item => 
+                    item.type && selectedSublist.itemTypes.includes(item.type)
+                );
+            }, [searchResults, data, selectedSublistId, sublists]);
+
+            // Filter left panel items based on selected sublist
+            const leftPanelDisplayItems = useMemo(() => {
+                if (!leftPanelData) return [];
+                
+                let filtered = leftPanelData;
+                
+                // Filter by search query
+                if (leftPanelSearchQuery) {
+                    filtered = filtered.filter(
+                        (item) =>
+                            item.name
+                                .toLowerCase()
+                                .includes(leftPanelSearchQuery.toLowerCase()) ||
+                            (item.type &&
+                                item.type
+                                    .toLowerCase()
+                                    .includes(leftPanelSearchQuery.toLowerCase()))
+                    );
+                }
+                
+                // Filter by selected sublist
+                if (leftPanelSelectedSublistId) {
+                    const selectedSublist = leftPanelSublists.find(s => s.id === leftPanelSelectedSublistId);
+                    if (selectedSublist && selectedSublist.itemTypes && selectedSublist.itemTypes.length > 0) {
+                        filtered = filtered.filter(item => 
+                            item.type && selectedSublist.itemTypes.includes(item.type)
+                        );
+                    } else {
+                        filtered = [];
+                    }
+                }
+                
+                return filtered;
+            }, [leftPanelData, leftPanelSearchQuery, leftPanelSelectedSublistId, leftPanelSublists]);
+
+            // Filter right panel items based on selected sublist
+            const rightPanelDisplayItems = useMemo(() => {
+                if (!rightPanelData) return [];
+                
+                let filtered = rightPanelData;
+                
+                // Filter by search query
+                if (rightPanelSearchQuery) {
+                    filtered = filtered.filter(
+                        (item) =>
+                            item.name
+                                .toLowerCase()
+                                .includes(rightPanelSearchQuery.toLowerCase()) ||
+                            (item.type &&
+                                item.type
+                                    .toLowerCase()
+                                    .includes(rightPanelSearchQuery.toLowerCase()))
+                    );
+                }
+                
+                // Filter by selected sublist
+                if (rightPanelSelectedSublistId) {
+                    const selectedSublist = rightPanelSublists.find(s => s.id === rightPanelSelectedSublistId);
+                    if (selectedSublist && selectedSublist.itemTypes && selectedSublist.itemTypes.length > 0) {
+                        filtered = filtered.filter(item => 
+                            item.type && selectedSublist.itemTypes.includes(item.type)
+                        );
+                    } else {
+                        filtered = [];
+                    }
+                }
+                
+                return filtered;
+            }, [rightPanelData, rightPanelSearchQuery, rightPanelSelectedSublistId, rightPanelSublists]);
 
             const activeInventory = inventories.find(
                 (inv) => inv.id === activeInventoryId
@@ -4319,8 +4798,8 @@
                             <div className="flex items-center gap-2">
                                 <button
                                     className={`p-2 rounded hover:bg-slate-800 transition ${isSplitView
-                                            ? "text-blue-400 bg-slate-800"
-                                            : "text-slate-400"
+                                        ? "text-blue-400 bg-slate-800"
+                                        : "text-slate-400"
                                         }`}
                                     onClick={() => {
                                         handleToggleSplitView();
@@ -4364,8 +4843,8 @@
                                                 key={tabId}
                                                 onClick={() => handleTabClick(tabId)}
                                                 className={`group relative px-4 py-2 min-w-[120px] max-w-[200px] text-sm cursor-pointer rounded-t-lg select-none flex items-center justify-between ${activeInventoryId === tabId
-                                                        ? "bg-slate-900 text-white border-t border-x border-slate-800"
-                                                        : "bg-slate-900/30 text-slate-500 hover:bg-slate-900/50"
+                                                    ? "bg-slate-900 text-white border-t border-x border-slate-800"
+                                                    : "bg-slate-900/30 text-slate-500 hover:bg-slate-900/50"
                                                     }`}
                                             >
                                                 <span className="truncate mr-2">{inv.name}</span>
@@ -4375,36 +4854,36 @@
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             const isOpening = openTabMenuId !== tabId;
-                                                            
+
                                                             if (isOpening) {
                                                                 // Calculate position synchronously before opening
                                                                 const rect = e.currentTarget.getBoundingClientRect();
                                                                 const menuWidth = 160; // min-w-[160px]
                                                                 const menuHeight = 80; // approximate height
                                                                 const spacing = 8; // spacing from button
-                                                                
+
                                                                 // Position below button, aligned to left
                                                                 // bottom is distance from bottom of viewport
                                                                 let bottom = window.innerHeight - rect.bottom - spacing;
                                                                 let left = rect.left;
-                                                                
+
                                                                 // Adjust if menu would go off bottom of screen (flip above)
                                                                 if (bottom < menuHeight) {
                                                                     bottom = window.innerHeight - rect.top + spacing;
                                                                 }
-                                                                
+
                                                                 // Adjust if menu would go off right edge
                                                                 if (left + menuWidth > window.innerWidth) {
                                                                     left = window.innerWidth - menuWidth - 8; // 8px padding from edge
                                                                 }
-                                                                
+
                                                                 // Ensure minimum padding from edges
                                                                 if (left < 8) left = 8;
                                                                 if (bottom < 8) bottom = 8;
-                                                                
+
                                                                 setMenuPosition({ bottom, left });
                                                             }
-                                                            
+
                                                             setOpenTabMenuId(isOpening ? tabId : null);
                                                         }}
                                                         className="tab-menu-button opacity-60 hover:opacity-100 hover:bg-slate-700 rounded p-0.5 transition-opacity"
@@ -4430,6 +4909,19 @@
                                                             >
                                                                 <FileText className="w-4 h-4" />
                                                                 Export inventory
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (activeInventoryId === tabId) {
+                                                                        setShowNewSublistModal(true);
+                                                                    }
+                                                                    setOpenTabMenuId(null);
+                                                                }}
+                                                                className="w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 flex items-center gap-2"
+                                                            >
+                                                                <Plus className="w-4 h-4" />
+                                                                New sublist
                                                             </button>
                                                             <button
                                                                 onClick={(e) => {
@@ -4506,8 +4998,8 @@
                                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                             <Search
                                                 className={`w-4 h-4 ${isSearching
-                                                        ? "text-blue-400 animate-pulse"
-                                                        : "text-slate-500"
+                                                    ? "text-blue-400 animate-pulse"
+                                                    : "text-slate-500"
                                                     }`}
                                             />
                                         </div>
@@ -4556,9 +5048,17 @@
                                     <span className="text-[10px] text-slate-500 uppercase font-bold mr-2">
                                         View:
                                     </span>
-                                    <select className="bg-transparent text-xs text-slate-300 outline-none hover:text-white cursor-pointer">
-                                        <option>Main List</option>
-                                        <option disabled>Sublists (Coming Soon)</option>
+                                    <select 
+                                        value={selectedSublistId || ""} 
+                                        onChange={(e) => setSelectedSublistId(e.target.value || null)}
+                                        className="bg-transparent text-xs text-slate-300 outline-none hover:text-white cursor-pointer"
+                                    >
+                                        <option value="">Main List</option>
+                                        {sublists.map((sublist) => (
+                                            <option key={sublist.id} value={sublist.id}>
+                                                {sublist.name}
+                                            </option>
+                                        ))}
                                     </select>
                                 </div>
                             )}
@@ -4593,6 +5093,7 @@
                                             onUpdateItem={handleUpdateItem}
                                             onReplaceImage={handleReplaceImage}
                                             onTransferItem={handleTransferItem}
+                                            onAddToSublist={handleAddToSublistClick}
                                         />
                                     </>
                                 )}
@@ -4647,9 +5148,17 @@
                                             <span className="text-[10px] text-slate-500 uppercase font-bold mr-2">
                                                 View:
                                             </span>
-                                            <select className="bg-transparent text-xs text-slate-300 outline-none hover:text-white cursor-pointer">
-                                                <option>Main List</option>
-                                                <option disabled>Sublists (Coming Soon)</option>
+                                            <select 
+                                                value={leftPanelSelectedSublistId || ""} 
+                                                onChange={(e) => setLeftPanelSelectedSublistId(e.target.value || null)}
+                                                className="bg-transparent text-xs text-slate-300 outline-none hover:text-white cursor-pointer"
+                                            >
+                                                <option value="">Main List</option>
+                                                {leftPanelSublists.map((sublist) => (
+                                                    <option key={sublist.id} value={sublist.id}>
+                                                        {sublist.name}
+                                                    </option>
+                                                ))}
                                             </select>
                                         </div>
                                     )}
@@ -4664,21 +5173,7 @@
                                                     <div className="w-28 px-2">Stock</div>
                                                 </div>
                                                 <VirtualList
-                                                    items={leftPanelData.filter(
-                                                        (item) =>
-                                                            !leftPanelSearchQuery ||
-                                                            item.name
-                                                                .toLowerCase()
-                                                                .includes(
-                                                                    leftPanelSearchQuery.toLowerCase()
-                                                                ) ||
-                                                            (item.type &&
-                                                                item.type
-                                                                    .toLowerCase()
-                                                                    .includes(
-                                                                        leftPanelSearchQuery.toLowerCase()
-                                                                    ))
-                                                    )}
+                                                    items={leftPanelDisplayItems}
                                                     imageMap={imageMap}
                                                     onUpdateItem={() => { }}
                                                     onReplaceImage={() => { }}
@@ -4689,6 +5184,7 @@
                                                         });
                                                         setShowTransferModal(true);
                                                     }}
+                                                    onAddToSublist={handleAddToSublistClick}
                                                 />
                                             </>
                                         ) : (
@@ -4743,9 +5239,17 @@
                                             <span className="text-[10px] text-slate-500 uppercase font-bold mr-2">
                                                 View:
                                             </span>
-                                            <select className="bg-transparent text-xs text-slate-300 outline-none hover:text-white cursor-pointer">
-                                                <option>Main List</option>
-                                                <option disabled>Sublists (Coming Soon)</option>
+                                            <select 
+                                                value={rightPanelSelectedSublistId || ""} 
+                                                onChange={(e) => setRightPanelSelectedSublistId(e.target.value || null)}
+                                                className="bg-transparent text-xs text-slate-300 outline-none hover:text-white cursor-pointer"
+                                            >
+                                                <option value="">Main List</option>
+                                                {rightPanelSublists.map((sublist) => (
+                                                    <option key={sublist.id} value={sublist.id}>
+                                                        {sublist.name}
+                                                    </option>
+                                                ))}
                                             </select>
                                         </div>
                                     )}
@@ -4760,21 +5264,7 @@
                                                     <div className="w-28 px-2">Stock</div>
                                                 </div>
                                                 <VirtualList
-                                                    items={rightPanelData.filter(
-                                                        (item) =>
-                                                            !rightPanelSearchQuery ||
-                                                            item.name
-                                                                .toLowerCase()
-                                                                .includes(
-                                                                    rightPanelSearchQuery.toLowerCase()
-                                                                ) ||
-                                                            (item.type &&
-                                                                item.type
-                                                                    .toLowerCase()
-                                                                    .includes(
-                                                                        rightPanelSearchQuery.toLowerCase()
-                                                                    ))
-                                                    )}
+                                                    items={rightPanelDisplayItems}
                                                     imageMap={imageMap}
                                                     onUpdateItem={() => { }}
                                                     onReplaceImage={() => { }}
@@ -4785,6 +5275,7 @@
                                                         });
                                                         setShowTransferModal(true);
                                                     }}
+                                                    onAddToSublist={handleAddToSublistClick}
                                                 />
                                             </>
                                         ) : (
@@ -4894,6 +5385,29 @@
                         sourceInventoryId={activeInventoryId}
                         inventories={inventories}
                         onTransfer={handleTransfer}
+                    />
+
+                    <NewSublistModal
+                        isOpen={showNewSublistModal}
+                        onClose={() => setShowNewSublistModal(false)}
+                        onCreate={handleCreateSublist}
+                    />
+
+                    <AddToSublistModal
+                        isOpen={showAddToSublistModal}
+                        onClose={() => {
+                            setShowAddToSublistModal(false);
+                            setItemToAddToSublist(null);
+                        }}
+                        sublists={[
+                            ...sublists,
+                            ...(isSplitView ? leftPanelSublists : []),
+                            ...(isSplitView ? rightPanelSublists : [])
+                        ].filter((s, index, self) => 
+                            index === self.findIndex(t => t.id === s.id)
+                        )}
+                        item={itemToAddToSublist}
+                        onAdd={handleAddItemToSublist}
                     />
 
                     <LoadingOverlay isVisible={isExporting} message="Exporting..." />
