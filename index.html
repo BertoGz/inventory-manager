@@ -4625,18 +4625,15 @@
                 const worksheet = workbook.addWorksheet("Inventory");
 
                 // Build column headers based on metadata options
-                const columns = [
-                    { header: "Type", key: "type", width: 20 },
-                    { header: "Name", key: "name", width: 30 },
-                ];
-                let colIndex = 2; // Start after Type and Name
+                // Type column will be added at the end as hidden
+                const columns = [];
                 let imageColIndex = -1;
 
                 if (metadataOptions.images) {
-                    columns.unshift({ header: "Image", key: "image", width: 15 });
+                    columns.push({ header: "Image", key: "image", width: 15 });
                     imageColIndex = 0;
-                    colIndex = 3; // Adjust after adding Image column
                 }
+                columns.push({ header: "Name", key: "name", width: 30 });
                 if (metadataOptions.quantity) {
                     columns.push({ header: "Quantity", key: "quantity", width: 10 });
                 }
@@ -4646,6 +4643,8 @@
                 if (metadataOptions.rarity) {
                     columns.push({ header: "Rarity", key: "rarity", width: 15 });
                 }
+                // Add Type column at the end as hidden (for metadata, not visible)
+                columns.push({ header: "Type", key: "type", width: 20 });
 
                 // Set column headers
                 worksheet.columns = columns;
@@ -4660,7 +4659,7 @@
                 };
                 headerRow.alignment = { vertical: "middle", horizontal: "center" };
 
-                // Set column alignments
+                // Set column alignments and hide Type column
                 let currentCol = 0;
                 if (metadataOptions.images) {
                     worksheet.getColumn(currentCol + 1).alignment = {
@@ -4669,11 +4668,6 @@
                     }; // Image
                     currentCol++;
                 }
-                worksheet.getColumn(currentCol + 1).alignment = {
-                    vertical: "middle",
-                    horizontal: "left",
-                }; // Type
-                currentCol++;
                 worksheet.getColumn(currentCol + 1).alignment = {
                     vertical: "middle",
                     horizontal: "left",
@@ -4700,17 +4694,28 @@
                     }; // Rarity
                     currentCol++;
                 }
+                // Type column is at the end - hide it
+                const typeColIndex = currentCol + 1;
+                worksheet.getColumn(typeColIndex).alignment = {
+                    vertical: "middle",
+                    horizontal: "left",
+                };
+                worksheet.getColumn(typeColIndex).hidden = true; // Hide Type column
 
                 // Add data rows with images
                 for (let i = 0; i < data.length; i++) {
                     const item = data[i];
-                    const rowData = {
-                        type: item.type || item.id || "",
-                        name: item.name || "",
-                    };
+                    // Build rowData in the same order as columns (Type always at the end)
+                    const rowData = {};
+                    if (metadataOptions.images) {
+                        rowData.image = ""; // Placeholder for image column
+                    }
+                    rowData.name = item.name || "";
                     if (metadataOptions.quantity) rowData.quantity = item.quantity || 0;
                     if (metadataOptions.prices) rowData.price = item.price || 0;
                     if (metadataOptions.rarity) rowData.rarity = RARITY_MAP[item.rarity]?.label || "Common";
+                    // Type always included at the end (hidden)
+                    rowData.type = item.type || item.id || "";
 
                     const row = worksheet.addRow(rowData);
 
@@ -4728,11 +4733,6 @@
                         }; // Image
                         cellIndex++;
                     }
-                    row.getCell(cellIndex).alignment = {
-                        vertical: "middle",
-                        horizontal: "left",
-                    }; // Type
-                    cellIndex++;
                     row.getCell(cellIndex).alignment = {
                         vertical: "middle",
                         horizontal: "left",
@@ -4759,6 +4759,7 @@
                         }; // Rarity
                         cellIndex++;
                     }
+                    // Type column is at the end (hidden) - alignment already set at column level
 
                     // Add image if available and images are enabled
                     if (metadataOptions.images && item.image && imageBlobs.has(item.image)) {
@@ -4789,9 +4790,11 @@
                             const cellHeight = row.height || 60;
 
                             // Calculate offset to center image (in Excel units: 1 col = ~64px, 1 row = ~20px)
-                            const colOffset = (cellWidth * 7 - imageSize) / 2 / 7; // Convert to column units
-                            const rowOffset = (cellHeight - imageSize) / 2 / 20; // Convert to row units
+                            const colWidthPixels = cellWidth * 7; // Approx width in pixels
+                            const xOffsetPixels = (colWidthPixels - imageSize) / 2; // Pixels of whitespace on left
+                            const colOffset = xOffsetPixels / colWidthPixels; // Ratio (0.0 to 1.0)
 
+                            const rowOffset = (cellHeight - imageSize) / 2 / 20;
                             worksheet.addImage(imageId, {
                                 tl: { col: imageColIndex + colOffset, row: i + 1 + rowOffset },
                                 ext: { width: imageSize, height: imageSize },
@@ -5210,7 +5213,7 @@
                                                                 className="w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 flex items-center gap-2"
                                                             >
                                                                 <FileText className="w-4 h-4" />
-                                                                Export inventory
+                                                                Export
                                                             </button>
                                                             <button
                                                                 onClick={(e) => {
