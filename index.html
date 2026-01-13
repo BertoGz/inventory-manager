@@ -513,6 +513,7 @@
                 const db = await openDB();
 
                 // 1. Update Catalog (Shared) - Batch write
+                // Use the values from items directly (they already have resolutions applied if there were conflicts)
                 const catalogTx = db.transaction([STORE_ITEM_CATALOG], "readwrite");
                 const catalogStore = catalogTx.objectStore(STORE_ITEM_CATALOG);
                 items.forEach((item) => {
@@ -4177,6 +4178,19 @@
                         }
                     }
 
+                    // Load catalog to check for global metadata conflicts (rarity, image)
+                    const db = await openDB();
+                    const catalogTx = db.transaction([STORE_ITEM_CATALOG], "readonly");
+                    const catalogStore = catalogTx.objectStore(STORE_ITEM_CATALOG);
+                    const catalogItems = await new Promise((resolve, reject) => {
+                        const req = catalogStore.getAll();
+                        req.onsuccess = () => resolve(req.result);
+                        req.onerror = () => reject(req.error);
+                    });
+                    const catalogMap = new Map(
+                        catalogItems.map((item) => [item.type, item])
+                    );
+
                     // Create maps for efficient lookup using TYPE
                     const existingItemsMap = new Map(
                         existingItems.map((item) => [item.type, item])
@@ -4187,8 +4201,10 @@
                     const conflicts = [];
                     for (const newItem of loadedData) {
                         const existingItem = existingItemsMap.get(newItem.type);
+                        const catalogItem = catalogMap.get(newItem.type);
+
+                        // Check inventory-specific conflicts (quantity, price) - only if item exists in inventory
                         if (existingItem) {
-                            debugger
                             // Only check quantity if it exists in newItem (ignore if missing)
                             if (newItem.hasOwnProperty("quantity") && newItem.quantity ) {
                                 const newQuantity = Number(newItem.quantity) || 0;
@@ -4219,8 +4235,9 @@
                                 }
                             }
 
+                            // Check global metadata conflicts (rarity, image) - use existingItem which already has catalog data merged
                             // Only check rarity if it exists in newItem (ignore if missing)
-                            if (newItem.hasOwnProperty("rarity") && newItem.rarity ) {
+                            if (newItem.hasOwnProperty("rarity") && newItem.rarity !== undefined && newItem.rarity !== null) {
                                 const newRarity = Number(newItem.rarity) || 0;
                                 const existingRarity = Number(existingItem.rarity) || 0;
                                 if (newRarity !== existingRarity) {
@@ -4230,6 +4247,7 @@
                                         field: "rarity",
                                         currentValue: existingRarity,
                                         newValue: newRarity,
+                                        isGlobalMetadata: true, // Flag to indicate this is global metadata
                                     });
                                 }
                             }
@@ -4253,10 +4271,51 @@
                                         field: "image",
                                         currentValue: existingImage || "None",
                                         newValue: newImage || "None",
+                                        isGlobalMetadata: true, // Flag to indicate this is global metadata
+                                    });
+                                }
+                            }
+                        } else if (catalogItem) {
+                            // Item doesn't exist in inventory but exists in catalog
+                            // Check global metadata conflicts against catalog
+                            // Only check rarity if it exists in newItem (ignore if missing)
+                            if (newItem.hasOwnProperty("rarity") && newItem.rarity !== undefined && newItem.rarity !== null) {
+                                const newRarity = Number(newItem.rarity) || 0;
+                                const catalogRarity = Number(catalogItem.rarity) || 0;
+                                if (newRarity !== catalogRarity) {
+                                    conflicts.push({
+                                        itemType: newItem.type,
+                                        item: catalogItem, // Use catalog item for global metadata conflicts
+                                        field: "rarity",
+                                        currentValue: catalogRarity,
+                                        newValue: newRarity,
+                                        isGlobalMetadata: true, // Flag to indicate this is global metadata
+                                    });
+                                }
+                            }
+
+                            // Only check image if it exists in newItem (ignore if missing)
+                            if (newItem.hasOwnProperty("image") && newItem.image) {
+                                // Normalize image values - handle empty string
+                                const newImage = String(newItem.image).trim();
+                                const catalogImage = catalogItem.image
+                                    ? String(catalogItem.image).trim()
+                                    : "";
+
+                                // Detect image conflict if catalog has an image and it's different from new
+                                if (catalogImage && catalogImage !== "" && newImage !== catalogImage) {
+                                    conflicts.push({
+                                        itemType: newItem.type,
+                                        item: catalogItem, // Use catalog item for global metadata conflicts
+                                        field: "image",
+                                        currentValue: catalogImage || "None",
+                                        newValue: newImage || "None",
+                                        isGlobalMetadata: true, // Flag to indicate this is global metadata
                                     });
                                 }
                             }
                         }
+                        // If item doesn't exist in inventory or catalog, no conflicts (will be added as new)
                     }
 
                     // If conflicts exist, show modal
@@ -4309,6 +4368,19 @@
                 resolutions = {}
             ) => {
                 try {
+                    // Load catalog to handle global metadata resolutions for items not in inventory
+                    const db = await openDB();
+                    const catalogTx = db.transaction([STORE_ITEM_CATALOG], "readonly");
+                    const catalogStore = catalogTx.objectStore(STORE_ITEM_CATALOG);
+                    const catalogItems = await new Promise((resolve, reject) => {
+                        const req = catalogStore.getAll();
+                        req.onsuccess = () => resolve(req.result);
+                        req.onerror = () => reject(req.error);
+                    });
+                    const catalogMap = new Map(
+                        catalogItems.map((item) => [item.type, item])
+                    );
+
                     // Create maps for efficient lookup using TYPE
                     const existingItemsMap = new Map(
                         existingItems.map((item) => [item.type, item])
@@ -4378,18 +4450,56 @@
                             });
                             // Don't add to itemsNeedingEmbeddings since we're not changing name
                         } else {
-                            // New item - add it completely with image
-                            updatedItems.push(newItem);
-                            itemsNeedingEmbeddings.push(newItem);
+                            // Item doesn't exist in inventory - check if it exists in catalog and has resolutions
+                            const catalogItem = catalogMap.get(newItem.type);
+                            const rarityKey = `${newItem.type}-rarity`;
+                            const imageKey = `${newItem.type}-image`;
 
-                            // Add image for new item
+                            let finalRarity = newItem.rarity !== undefined ? newItem.rarity : 0;
+                            let finalImage = newItem.image || "";
+
+                            // Apply resolutions if item exists in catalog (global metadata conflicts)
+                            if (catalogItem) {
+                                if (resolutions[rarityKey] === "keep") {
+                                    finalRarity = catalogItem.rarity !== undefined ? catalogItem.rarity : 0;
+                                } else if (resolutions[rarityKey] === "replace") {
+                                    finalRarity = newItem.rarity !== undefined ? newItem.rarity : 0;
+                                }
+                                // If no resolution, use new value (default behavior)
+
+                                if (resolutions[imageKey] === "keep") {
+                                    finalImage = catalogItem.image || "";
+                                } else if (resolutions[imageKey] === "replace") {
+                                    finalImage = newItem.image || "";
+                                    // Add new image to file map if replacing
+                                    if (newItem.image && loadedFileMap.has(newItem.image)) {
+                                        newImageFileMap.set(
+                                            newItem.image,
+                                            loadedFileMap.get(newItem.image)
+                                        );
+                                    }
+                                }
+                                // If no resolution, use new value (default behavior)
+                            }
+
+                            // Create item with resolved values
+                            const resolvedItem = {
+                                ...newItem,
+                                rarity: finalRarity,
+                                image: finalImage,
+                            };
+                            updatedItems.push(resolvedItem);
+                            itemsNeedingEmbeddings.push(resolvedItem);
+
+                            // Add image for new item (if not already added above)
                             if (
-                                newItem.image &&
-                                !existingImageFilenames.has(newItem.image)
+                                finalImage &&
+                                !existingImageFilenames.has(finalImage) &&
+                                loadedFileMap.has(finalImage)
                             ) {
-                                const imageFile = loadedFileMap.get(newItem.image);
+                                const imageFile = loadedFileMap.get(finalImage);
                                 if (imageFile) {
-                                    newImageFileMap.set(newItem.image, imageFile);
+                                    newImageFileMap.set(finalImage, imageFile);
                                 }
                             }
                         }
