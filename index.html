@@ -1058,45 +1058,45 @@
             );
         };
 
-      const ExportFormatModal = ({ isOpen, onClose, onSelectFormat }) => {
-        const [selectedFormat, setSelectedFormat] = useState(null);
-        const [dataMetadataOptions, setDataMetadataOptions] = useState({
-          images: true,
-          quantity: true,
-          rarity: true,
-          prices: true,
-        });
-
-        useEffect(() => {
-          if (isOpen) {
-            setSelectedFormat(null);
-            setDataMetadataOptions({
-              images: true,
-              quantity: true,
-              rarity: true,
-              prices: true,
+        const ExportFormatModal = ({ isOpen, onClose, onSelectFormat }) => {
+            const [selectedFormat, setSelectedFormat] = useState(null);
+            const [dataMetadataOptions, setDataMetadataOptions] = useState({
+                images: true,
+                quantity: true,
+                rarity: true,
+                prices: true,
             });
-          }
-        }, [isOpen]);
 
-        if (!isOpen) return null;
+            useEffect(() => {
+                if (isOpen) {
+                    setSelectedFormat(null);
+                    setDataMetadataOptions({
+                        images: true,
+                        quantity: true,
+                        rarity: true,
+                        prices: true,
+                    });
+                }
+            }, [isOpen]);
 
-        const toggleDataMetadataOption = (option) => {
-          setDataMetadataOptions((prev) => ({
-            ...prev,
-            [option]: !prev[option],
-          }));
-        };
+            if (!isOpen) return null;
 
-        const handleContinue = () => {
-          if (!selectedFormat) return;
-          
-          if (selectedFormat === "data") {
-            onSelectFormat("data", dataMetadataOptions);
-          } else {
-            onSelectFormat(selectedFormat);
-          }
-        };
+            const toggleDataMetadataOption = (option) => {
+                setDataMetadataOptions((prev) => ({
+                    ...prev,
+                    [option]: !prev[option],
+                }));
+            };
+
+            const handleContinue = () => {
+                if (!selectedFormat) return;
+
+                if (selectedFormat === "data") {
+                    onSelectFormat("data", dataMetadataOptions);
+                } else {
+                    onSelectFormat(selectedFormat);
+                }
+            };
 
             return (
                 <div
@@ -1116,41 +1116,37 @@
                         <div className="space-y-2 mb-6">
                             <button
                                 onClick={() => setSelectedFormat("data")}
-                                className={`w-full text-left px-4 py-3 text-sm rounded-lg transition-colors border ${
-                                    selectedFormat === "data"
+                                className={`w-full text-left px-4 py-3 text-sm rounded-lg transition-colors border ${selectedFormat === "data"
                                         ? "bg-blue-600 text-white border-blue-500"
                                         : "text-slate-300 hover:bg-slate-800 border-slate-700 hover:border-slate-600"
-                                }`}
+                                    }`}
                             >
                                 Data
                             </button>
                             <button
                                 onClick={() => setSelectedFormat("csv")}
-                                className={`w-full text-left px-4 py-3 text-sm rounded-lg transition-colors border ${
-                                    selectedFormat === "csv"
+                                className={`w-full text-left px-4 py-3 text-sm rounded-lg transition-colors border ${selectedFormat === "csv"
                                         ? "bg-blue-600 text-white border-blue-500"
                                         : "text-slate-300 hover:bg-slate-800 border-slate-700 hover:border-slate-600"
-                                }`}
+                                    }`}
                             >
                                 CSV
                             </button>
                             <button
                                 onClick={() => setSelectedFormat("excel")}
-                                className={`w-full text-left px-4 py-3 text-sm rounded-lg transition-colors border ${
-                                    selectedFormat === "excel"
+                                className={`w-full text-left px-4 py-3 text-sm rounded-lg transition-colors border ${selectedFormat === "excel"
                                         ? "bg-blue-600 text-white border-blue-500"
                                         : "text-slate-300 hover:bg-slate-800 border-slate-700 hover:border-slate-600"
-                                }`}
+                                    }`}
                             >
                                 Excel
                             </button>
                             <button
                                 onClick={() => setSelectedFormat("pdf")}
-                                className={`w-full text-left px-4 py-3 text-sm rounded-lg transition-colors border ${
-                                    selectedFormat === "pdf"
+                                className={`w-full text-left px-4 py-3 text-sm rounded-lg transition-colors border ${selectedFormat === "pdf"
                                         ? "bg-blue-600 text-white border-blue-500"
                                         : "text-slate-300 hover:bg-slate-800 border-slate-700 hover:border-slate-600"
-                                }`}
+                                    }`}
                             >
                                 PDF
                             </button>
@@ -2471,18 +2467,102 @@
                     });
                 }
 
-                if (!initSqlJs) {
-                    throw new Error(
-                        "SQL.js library not loaded. Please refresh the page and try again."
-                    );
-                }
+                if (!initSqlJs) throw new Error("SQL.js library not loaded.");
 
                 const arrayBuffer = await dbFile.arrayBuffer();
                 const SQL = await initSqlJs({
-                    locateFile: (file) =>
-                        `https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/${file}`,
+                    locateFile: (file) => `https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/${file}`,
                 });
                 const db = new SQL.Database(new Uint8Array(arrayBuffer));
+
+                // --- CHECK FOR FULL BACKUP (Multi-Inventory) ---
+                // We check if the 'inventories' table exists in the file
+                const tables = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='inventories'");
+
+                if (tables.length > 0) {
+                    // --- FULL RESTORE MODE ---
+                 
+
+                    try {
+                        console.log("Starting full restore...");
+                        await clearIndexedDB(); // Wipe current state
+                        const idb = await openDB();
+
+                        // Helper to read SQL table and write to IndexedDB
+                        const restoreTable = async (sqlTable, idbStore, mapper) => {
+                            const res = db.exec(`SELECT * FROM ${sqlTable}`);
+                            if (res.length && res[0].values.length) {
+                                const tx = idb.transaction(idbStore, 'readwrite');
+                                const store = tx.objectStore(idbStore);
+                                const cols = res[0].columns;
+
+                                res[0].values.forEach(row => {
+                                    // Create object from row using column names
+                                    const obj = {};
+                                    cols.forEach((col, i) => obj[col] = row[i]);
+                                    // Apply custom mapping if provided
+                                    const finalObj = mapper ? mapper(obj) : obj;
+                                    store.put(finalObj);
+                                });
+                                await new Promise(resolve => tx.oncomplete = resolve);
+                               
+                            }
+                        };
+
+                        // 1. Restore Inventories
+                        await restoreTable('inventories', STORE_INVENTORIES);
+
+                        // 2. Restore Catalog
+                        await restoreTable('catalog', STORE_ITEM_CATALOG);
+
+                        // 3. Restore Inventory Items
+                        await restoreTable('inventory_items', STORE_INVENTORY_ITEMS);
+
+                        // 4. Restore Sublists (Parse itemTypes string back to array)
+                        await restoreTable('sublists', STORE_SUBLISTS, (obj) => ({
+                            ...obj,
+                            itemTypes: JSON.parse(obj.itemTypes || "[]")
+                        }));
+
+                        // 5. Restore Images
+                        const imgRes = db.exec("SELECT * FROM images");
+                        if (imgRes.length && imgRes[0].values.length) {
+                            const tx = idb.transaction(STORE_IMAGES, 'readwrite');
+                            const store = tx.objectStore(STORE_IMAGES);
+                            imgRes[0].values.forEach(row => {
+                                const filename = row[0];
+                                const data = row[1]; // Uint8Array from SQL.js
+                                const blob = new Blob([data], { type: 'image/jpeg' });
+                                store.put({ filename, blob });
+                            });
+                            await new Promise(resolve => tx.oncomplete = resolve);
+                            console.log("Restored images");
+                        }
+
+                        // 6. Restore Metadata
+                        const metaRes = db.exec("SELECT * FROM metadata");
+                        if (metaRes.length) {
+                            const tx = idb.transaction(STORE_METADATA, 'readwrite');
+                            metaRes[0].values.forEach(row => {
+                                tx.objectStore(STORE_METADATA).put({ key: row[0], value: row[1] });
+                            });
+                        }
+
+                        db.close();
+
+                        window.location.reload(); // Reload to reflect full state change
+                        return;
+
+                    } catch (e) {
+                        console.error("Full restore failed:", e);
+                        alert("Restore failed: " + e.message);
+                        db.close();
+                        return;
+                    }
+                }
+
+                // --- LEGACY IMPORT MODE (Single Inventory) ---
+                // Falls back to this if 'inventories' table is missing
 
                 const itemsResult = db.exec(
                     "SELECT type, id, name, quantity, price, rarity, image, data FROM items"
@@ -2575,7 +2655,6 @@
 
                 onDataLoaded(enrichedData, urlMap, metadata, fileMap);
             };
-
             return (
                 <div className="flex flex-col items-center justify-center h-full space-y-6 p-8 text-center bg-slate-950 text-slate-100 animate-in fade-in duration-700">
                     <div className="bg-slate-900/50 p-10 rounded-2xl border border-slate-800 shadow-2xl max-w-4xl w-full backdrop-blur-sm">
@@ -4206,7 +4285,7 @@
                         // Check inventory-specific conflicts (quantity, price) - only if item exists in inventory
                         if (existingItem) {
                             // Only check quantity if it exists in newItem (ignore if missing)
-                            if (newItem.hasOwnProperty("quantity") && newItem.quantity ) {
+                            if (newItem.hasOwnProperty("quantity") && newItem.quantity) {
                                 const newQuantity = Number(newItem.quantity) || 0;
                                 const existingQuantity = Number(existingItem.quantity) || 0;
                                 if (newQuantity !== existingQuantity) {
@@ -4221,7 +4300,7 @@
                             }
 
                             // Only check price if it exists in newItem (ignore if missing)
-                            if (newItem.hasOwnProperty("price") && newItem.price ) {
+                            if (newItem.hasOwnProperty("price") && newItem.price) {
                                 const newPrice = Number(newItem.price) || 0;
                                 const existingPrice = Number(existingItem.price) || 0;
                                 if (newPrice !== existingPrice) {
@@ -4768,14 +4847,12 @@
 
             const handleSaveToDesktopConfirm = async () => {
                 setShowSaveToDesktopModal(false);
-                if (!data) return;
-
                 setIsExporting(true);
+
                 try {
-                    // Wait for sql.js to be available
+                    // 1. Initialize SQL.js
                     let initSqlJs = window.initSqlJs;
                     if (!initSqlJs) {
-                        // Wait a bit for the script to load
                         await new Promise((resolve) => {
                             let attempts = 0;
                             const checkInterval = setInterval(() => {
@@ -4792,138 +4869,112 @@
                         });
                     }
 
-                    if (!initSqlJs) {
-                        throw new Error(
-                            "SQL.js library not loaded. Please refresh the page and try again."
-                        );
-                    }
+                    if (!initSqlJs) throw new Error("SQL.js library not loaded.");
 
                     const SQL = await initSqlJs({
-                        locateFile: (file) =>
-                            `https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/${file}`,
+                        locateFile: (file) => `https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/${file}`,
                     });
                     const db = new SQL.Database();
 
-                    // Create tables
-                    db.run(`
-                        CREATE TABLE IF NOT EXISTS metadata (
-                            key TEXT PRIMARY KEY,
-                            value TEXT
-                        );
-                    `);
+                    // 2. Create Tables (Both Legacy "items" and New Structure)
+                    db.run(`CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT);`);
+                    
+                    // Legacy table for backward compatibility / single view tools
+                    db.run(`CREATE TABLE IF NOT EXISTS items (type TEXT PRIMARY KEY, id TEXT, name TEXT, quantity INTEGER, price REAL, rarity INTEGER, image TEXT, data TEXT);`);
+                    db.run(`CREATE TABLE IF NOT EXISTS images (filename TEXT PRIMARY KEY, data BLOB);`);
 
-                    db.run(`
-                        CREATE TABLE IF NOT EXISTS items (
-                            type TEXT PRIMARY KEY, 
-                            id TEXT,
-                            name TEXT,
-                            quantity INTEGER,
-                            price REAL,
-                            rarity INTEGER,
-                            image TEXT,
-                            data TEXT
-                        );
-                    `);
+                    // NEW TABLES for Full State Backup
+                    db.run(`CREATE TABLE IF NOT EXISTS inventories (id TEXT PRIMARY KEY, name TEXT, createdAt INTEGER, updatedAt INTEGER);`);
+                    db.run(`CREATE TABLE IF NOT EXISTS inventory_items (inventoryId TEXT, type TEXT, quantity INTEGER, price REAL);`);
+                    db.run(`CREATE TABLE IF NOT EXISTS sublists (id TEXT PRIMARY KEY, inventoryId TEXT, name TEXT, itemTypes TEXT, createdAt INTEGER, updatedAt INTEGER);`);
+                    db.run(`CREATE TABLE IF NOT EXISTS catalog (type TEXT PRIMARY KEY, name TEXT, image TEXT, rarity INTEGER);`);
 
-                    db.run(`
-                        CREATE TABLE IF NOT EXISTS images (
-                            filename TEXT PRIMARY KEY,
-                            data BLOB
-                        );
-                    `);
-
-                    // Get current date
+                    // 3. Save Metadata
                     const now = new Date();
-                    const currentDate = now.toLocaleString("en-US", {
-                        weekday: "long",
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                        timeZoneName: "short",
+                    db.run(`INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)`, ["date", now.toLocaleString()]);
+                    db.run(`INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)`, ["version", "5.0"]);
+
+                    // 4. Fetch ALL Data from IndexedDB
+                    const idb = await openDB();
+                    
+                    const [catItems, invItems, invs, subs, imgs] = await Promise.all([
+                        new Promise(r => idb.transaction(STORE_ITEM_CATALOG, 'readonly').objectStore(STORE_ITEM_CATALOG).getAll().onsuccess = e => r(e.target.result)),
+                        new Promise(r => idb.transaction(STORE_INVENTORY_ITEMS, 'readonly').objectStore(STORE_INVENTORY_ITEMS).getAll().onsuccess = e => r(e.target.result)),
+                        new Promise(r => idb.transaction(STORE_INVENTORIES, 'readonly').objectStore(STORE_INVENTORIES).getAll().onsuccess = e => r(e.target.result)),
+                        new Promise(r => idb.transaction(STORE_SUBLISTS, 'readonly').objectStore(STORE_SUBLISTS).getAll().onsuccess = e => r(e.target.result)),
+                        getImagesFromIndexedDB()
+                    ]);
+
+                    // 5. Save Data to SQLite
+                    
+                    // Inventories
+                    const stmtInv = db.prepare("INSERT INTO inventories VALUES (?, ?, ?, ?)");
+                    invs.forEach(i => stmtInv.run([i.id, i.name, i.createdAt, i.updatedAt]));
+                    stmtInv.free();
+
+                    // Inventory Items
+                    const stmtInvItems = db.prepare("INSERT INTO inventory_items VALUES (?, ?, ?, ?)");
+                    invItems.forEach(i => stmtInvItems.run([i.inventoryId, i.type, i.quantity, i.price]));
+                    stmtInvItems.free();
+
+                    // Catalog
+                    const stmtCat = db.prepare("INSERT INTO catalog VALUES (?, ?, ?, ?)");
+                    catItems.forEach(c => stmtCat.run([c.type, c.name, c.image, c.rarity]));
+                    stmtCat.free();
+
+                    // Sublists
+                    const stmtSub = db.prepare("INSERT INTO sublists VALUES (?, ?, ?, ?, ?, ?)");
+                    subs.forEach(s => stmtSub.run([s.id, s.inventoryId, s.name, JSON.stringify(s.itemTypes), s.createdAt, s.updatedAt]));
+                    stmtSub.free();
+
+                    // Legacy "items" table (Aggregated) for compatibility
+                    const catalogMap = new Map(catItems.map(i => [i.type, i]));
+                    const aggregationMap = new Map();
+                    invItems.forEach(invItem => {
+                        const type = invItem.type;
+                        const cat = catalogMap.get(type) || {};
+                        if (!aggregationMap.has(type)) {
+                            aggregationMap.set(type, {
+                                type: type, id: type, name: cat.name || "Unknown", image: cat.image || "",
+                                rarity: cat.rarity || 0, price: invItem.price || 0, quantity: 0
+                            });
+                        }
+                        aggregationMap.get(type).quantity += (invItem.quantity || 0);
                     });
-                    const currentTimestamp = now.getTime();
-
-                    // Save metadata
-                    db.run(
-                        `INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)`,
-                        ["timestamp", currentTimestamp.toString()]
-                    );
-                    db.run(
-                        `INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)`,
-                        ["date", currentDate]
-                    );
-
-                    // Prepare export data
-                    const exportData = data.map(
-                        ({ actualIndex, score, ...item }) => item
-                    );
-                    const exportObject = {
-                        data: exportData,
-                        timestamp: currentTimestamp,
-                        Date: currentDate,
-                    };
-
-                    // Save items - TYPE is primary key
-                    const stmt = db.prepare(
-                        `INSERT OR REPLACE INTO items (type, id, name, quantity, price, rarity, image, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-                    );
-                    for (const item of exportData) {
-                        stmt.run([
-                            item.type || item.id || "",
-                            item.id || "",
-                            item.name || "",
-                            item.quantity || 0,
-                            item.price || 0,
-                            item.rarity || 0,
-                            item.image || "",
-                            JSON.stringify(item),
-                        ]);
+                    const stmtItems = db.prepare("INSERT INTO items VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                    for (const item of aggregationMap.values()) {
+                        stmtItems.run([item.type, item.type, item.name, item.quantity, item.price, item.rarity, item.image, JSON.stringify(item)]);
                     }
-                    stmt.free();
+                    stmtItems.free();
 
-                    // Get images from IndexedDB and save to database
-                    const imageBlobs = await getImagesFromIndexedDB();
-                    const imageStmt = db.prepare(
-                        `INSERT OR REPLACE INTO images (filename, data) VALUES (?, ?)`
-                    );
-
-                    for (const [filename, blob] of imageBlobs.entries()) {
-                        const arrayBuffer = await blob.arrayBuffer();
-                        const uint8Array = new Uint8Array(arrayBuffer);
-                        imageStmt.run([filename, uint8Array]);
+                    // Images
+                    const stmtImg = db.prepare("INSERT INTO images VALUES (?, ?)");
+                    for (const [filename, blob] of imgs.entries()) {
+                        const u8 = new Uint8Array(await blob.arrayBuffer());
+                        stmtImg.run([filename, u8]);
                     }
-                    imageStmt.free();
+                    stmtImg.free();
 
-                    // Export database to file
+                    // 6. Export
                     const dbData = db.export();
-                    const dbBlob = new Blob([dbData], {
-                        type: "application/x-sqlite3",
-                    });
+                    const dbBlob = new Blob([dbData], { type: "application/x-sqlite3" });
                     const url = URL.createObjectURL(dbBlob);
                     const a = document.createElement("a");
                     a.href = url;
-                    const dateStr = now.toISOString().split("T")[0];
-                    a.download = `my_vmk_furniture_${dateStr}.db`;
+                    a.download = `inventory_backup_${now.toISOString().split("T")[0]}.db`;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
-
                     db.close();
-                    console.log(
-                        `Saved ${exportData.length} items and ${imageBlobs.size} images to database file.`
-                    );
+
                 } catch (e) {
-                    console.error("Error saving to desktop:", e);
-                    alert(`Error saving to desktop: ${e.message}`);
+                    console.error(e);
+                    alert("Export failed: " + e.message);
                 } finally {
                     setIsExporting(false);
                 }
             };
-
             const handleExportFor = () => {
                 setShowExportFormatModal(true);
             };
