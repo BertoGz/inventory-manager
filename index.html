@@ -1852,6 +1852,386 @@
         );
       };
 
+      const ConflictsResolutionModal = ({
+        isOpen,
+        onClose,
+        conflicts,
+        imageMap,
+        loadedUrlMap,
+        onApply,
+      }) => {
+        const [resolutions, setResolutions] = useState({});
+
+        useEffect(() => {
+          if (isOpen && conflicts) {
+            // Initialize resolutions with default "Keep" for all conflicts
+            const initialResolutions = {};
+            conflicts.forEach((conflict) => {
+              const key = `${conflict.itemType}-${conflict.field}`;
+              initialResolutions[key] = "keep";
+            });
+            setResolutions(initialResolutions);
+          }
+        }, [isOpen, conflicts]);
+
+        if (!isOpen || !conflicts || conflicts.length === 0) return null;
+
+        const handleResolutionChange = (itemType, field, action) => {
+          const key = `${itemType}-${field}`;
+          setResolutions((prev) => ({
+            ...prev,
+            [key]: action,
+          }));
+        };
+
+        const handleApply = () => {
+          onApply(resolutions);
+          onClose();
+        };
+
+        const handleApplyAll = (action) => {
+          const newResolutions = {};
+          conflicts.forEach((conflict) => {
+            const key = `${conflict.itemType}-${conflict.field}`;
+            newResolutions[key] = action;
+          });
+          setResolutions(newResolutions);
+        };
+
+        // Group conflicts by item
+        const conflictsByItem = {};
+        conflicts.forEach((conflict) => {
+          if (!conflictsByItem[conflict.itemType]) {
+            conflictsByItem[conflict.itemType] = {
+              item: conflict.item,
+              conflicts: [],
+            };
+          }
+          conflictsByItem[conflict.itemType].conflicts.push(conflict);
+        });
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={onClose}
+          >
+            <div
+              className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-4xl w-full mx-4 shadow-2xl max-h-[90vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold text-slate-200 mb-4">
+                Resolve Conflicts ({conflicts.length} found)
+              </h3>
+
+              <div className="mb-4 flex gap-2">
+                <button
+                  onClick={() => handleApplyAll("keep")}
+                  className="px-3 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors"
+                >
+                  Keep All Existing
+                </button>
+                <button
+                  onClick={() => handleApplyAll("replace")}
+                  className="px-3 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors"
+                >
+                  Replace All
+                </button>
+                {conflicts.some((c) => c.field === "quantity") && (
+                  <button
+                    onClick={() => {
+                      const newResolutions = {};
+                      conflicts.forEach((conflict) => {
+                        const key = `${conflict.itemType}-${conflict.field}`;
+                        newResolutions[key] =
+                          conflict.field === "quantity" ? "add" : "replace";
+                      });
+                      setResolutions(newResolutions);
+                    }}
+                    className="px-3 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors"
+                  >
+                    Add Quantities, Replace Others
+                  </button>
+                )}
+              </div>
+
+              <div className="flex-1 overflow-y-auto mb-4">
+                <div className="space-y-4">
+                  {Object.entries(conflictsByItem).map(
+                    ([itemType, { item, conflicts: itemConflicts }]) => {
+                      const imageUrl = imageMap?.get(item.image);
+                      return (
+                        <div
+                          key={itemType}
+                          className="bg-slate-800 rounded-lg p-4 border border-slate-700"
+                        >
+                          <div className="flex items-start gap-4 mb-3">
+                            <div className="w-16 h-16 flex-shrink-0 rounded-lg bg-slate-700/50 border border-slate-600/50 overflow-hidden relative">
+                              {imageUrl ? (
+                                <img
+                                  src={imageUrl}
+                                  alt={item.name}
+                                  className="w-full h-full object-contain"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex flex-col items-center justify-center text-slate-600">
+                                  <ImageIcon className="w-5 h-5 opacity-40" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-slate-300">
+                                {item.name}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-1">
+                                {item.type}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            {itemConflicts.map((conflict) => {
+                              const key = `${conflict.itemType}-${conflict.field}`;
+                              const resolution = resolutions[key] || "keep";
+                              const fieldLabel =
+                                conflict.field.charAt(0).toUpperCase() +
+                                conflict.field.slice(1);
+
+                              return (
+                                <div
+                                  key={key}
+                                  className="bg-slate-900 rounded p-3 border border-slate-700/50"
+                                >
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium text-slate-300">
+                                      {fieldLabel}
+                                    </span>
+                                    <div className="flex gap-2">
+                                      {conflict.field === "quantity" ? (
+                                        <>
+                                          <button
+                                            onClick={() =>
+                                              handleResolutionChange(
+                                                conflict.itemType,
+                                                conflict.field,
+                                                "keep"
+                                              )
+                                            }
+                                            className={`px-2 py-1 text-xs rounded transition-colors ${
+                                              resolution === "keep"
+                                                ? "bg-blue-600 text-white"
+                                                : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                                            }`}
+                                          >
+                                            Keep ({conflict.currentValue})
+                                          </button>
+                                          <button
+                                            onClick={() =>
+                                              handleResolutionChange(
+                                                conflict.itemType,
+                                                conflict.field,
+                                                "replace"
+                                              )
+                                            }
+                                            className={`px-2 py-1 text-xs rounded transition-colors ${
+                                              resolution === "replace"
+                                                ? "bg-blue-600 text-white"
+                                                : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                                            }`}
+                                          >
+                                            Replace ({conflict.newValue})
+                                          </button>
+                                          <button
+                                            onClick={() =>
+                                              handleResolutionChange(
+                                                conflict.itemType,
+                                                conflict.field,
+                                                "add"
+                                              )
+                                            }
+                                            className={`px-2 py-1 text-xs rounded transition-colors ${
+                                              resolution === "add"
+                                                ? "bg-blue-600 text-white"
+                                                : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                                            }`}
+                                          >
+                                            Add ({conflict.currentValue} +{" "}
+                                            {conflict.newValue} ={" "}
+                                            {conflict.currentValue +
+                                              conflict.newValue}
+                                            )
+                                          </button>
+                                        </>
+                                      ) : conflict.field === "image" ? (
+                                        <>
+                                          {/* Image conflict - show previews */}
+                                          <div className="flex gap-4 items-center mb-2">
+                                            <div className="flex-1">
+                                              <div className="text-xs text-slate-400 mb-1">
+                                                Current Image:
+                                              </div>
+                                              <div className="w-20 h-20 rounded-lg bg-slate-700/50 border border-slate-600/50 overflow-hidden">
+                                                {imageMap?.get(
+                                                  conflict.currentValue
+                                                ) ? (
+                                                  <img
+                                                    src={imageMap.get(
+                                                      conflict.currentValue
+                                                    )}
+                                                    alt="Current"
+                                                    className="w-full h-full object-contain"
+                                                  />
+                                                ) : (
+                                                  <div className="w-full h-full flex items-center justify-center">
+                                                    <ImageIcon className="w-5 h-5 opacity-40 text-slate-600" />
+                                                  </div>
+                                                )}
+                                              </div>
+                                              <div className="text-xs text-slate-500 mt-1 truncate max-w-[80px]">
+                                                {conflict.currentValue ||
+                                                  "None"}
+                                              </div>
+                                            </div>
+                                            <div className="text-slate-500">
+                                              →
+                                            </div>
+                                            <div className="flex-1">
+                                              <div className="text-xs text-slate-400 mb-1">
+                                                New Image:
+                                              </div>
+                                              <div className="w-20 h-20 rounded-lg bg-slate-700/50 border border-slate-600/50 overflow-hidden">
+                                                {loadedUrlMap?.get(
+                                                  conflict.newValue
+                                                ) ||
+                                                imageMap?.get(
+                                                  conflict.newValue
+                                                ) ? (
+                                                  <img
+                                                    src={
+                                                      loadedUrlMap?.get(
+                                                        conflict.newValue
+                                                      ) ||
+                                                      imageMap.get(
+                                                        conflict.newValue
+                                                      )
+                                                    }
+                                                    alt="New"
+                                                    className="w-full h-full object-contain"
+                                                  />
+                                                ) : (
+                                                  <div className="w-full h-full flex items-center justify-center">
+                                                    <ImageIcon className="w-5 h-5 opacity-40 text-slate-600" />
+                                                  </div>
+                                                )}
+                                              </div>
+                                              <div className="text-xs text-slate-500 mt-1 truncate max-w-[80px]">
+                                                {conflict.newValue || "None"}
+                                              </div>
+                                            </div>
+                                          </div>
+                                          <div className="flex gap-2">
+                                            <button
+                                              onClick={() =>
+                                                handleResolutionChange(
+                                                  conflict.itemType,
+                                                  conflict.field,
+                                                  "keep"
+                                                )
+                                              }
+                                              className={`px-2 py-1 text-xs rounded transition-colors ${
+                                                resolution === "keep"
+                                                  ? "bg-blue-600 text-white"
+                                                  : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                                              }`}
+                                            >
+                                              Keep Current
+                                            </button>
+                                            <button
+                                              onClick={() =>
+                                                handleResolutionChange(
+                                                  conflict.itemType,
+                                                  conflict.field,
+                                                  "replace"
+                                                )
+                                              }
+                                              className={`px-2 py-1 text-xs rounded transition-colors ${
+                                                resolution === "replace"
+                                                  ? "bg-blue-600 text-white"
+                                                  : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                                              }`}
+                                            >
+                                              Use New
+                                            </button>
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <button
+                                            onClick={() =>
+                                              handleResolutionChange(
+                                                conflict.itemType,
+                                                conflict.field,
+                                                "keep"
+                                              )
+                                            }
+                                            className={`px-2 py-1 text-xs rounded transition-colors ${
+                                              resolution === "keep"
+                                                ? "bg-blue-600 text-white"
+                                                : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                                            }`}
+                                          >
+                                            Keep ({conflict.currentValue})
+                                          </button>
+                                          <button
+                                            onClick={() =>
+                                              handleResolutionChange(
+                                                conflict.itemType,
+                                                conflict.field,
+                                                "replace"
+                                              )
+                                            }
+                                            className={`px-2 py-1 text-xs rounded transition-colors ${
+                                              resolution === "replace"
+                                                ? "bg-blue-600 text-white"
+                                                : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                                            }`}
+                                          >
+                                            Replace ({conflict.newValue})
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    }
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-700">
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleApply}
+                  className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors"
+                >
+                  Apply Selected
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
       const FileUploader = ({ onDataLoaded, hasExistingData }) => {
         const [loading, setLoading] = useState(false);
         const [error, setError] = useState(null);
@@ -2764,6 +3144,8 @@
         const [showUpdateConfirmModal, setShowUpdateConfirmModal] =
           useState(false);
         const [pendingUpdateData, setPendingUpdateData] = useState(null);
+        const [showConflictsModal, setShowConflictsModal] = useState(false);
+        const [conflictsData, setConflictsData] = useState(null);
         const [showSaveToDesktopModal, setShowSaveToDesktopModal] =
           useState(false);
         const [isExporting, setIsExporting] = useState(false);
@@ -3462,22 +3844,11 @@
             }
 
             try {
-              // If item doesn't have an image filename, generate one based on type or id
-              let filename = item.image;
-              let needsDataUpdate = false;
-
-              if (!filename || filename.trim() === "") {
-                // Generate filename from item type or id, with appropriate extension
-                const baseName =
-                  item.type || item.id || `item_${item.actualIndex}`;
-                // Get file extension from the new image file
-                const fileExtension =
-                  newImageFile.name.split(".").pop() || "jpg";
-                filename = `${baseName}.${fileExtension}`;
-                needsDataUpdate = true;
-              }
-
-              const oldImageUrl = imageMap?.get(filename);
+              // Use the new image file's name as the filename
+              // This ensures the item's image field reflects the actual image file name
+              const filename = newImageFile.name;
+              const oldFilename = item.image;
+              const oldImageUrl = imageMap?.get(oldFilename);
 
               // Create new blob URL
               const newImageUrl = URL.createObjectURL(newImageFile);
@@ -3485,40 +3856,38 @@
               // Update imageMap state first so UI updates immediately
               setImageMap((prevMap) => {
                 const newMap = new Map(prevMap);
-                // Revoke old blob URL if it exists
-                if (oldImageUrl && oldImageUrl.startsWith("blob:")) {
-                  URL.revokeObjectURL(oldImageUrl);
+                // Remove old image from map if it exists and is different
+                if (oldFilename && oldFilename !== filename) {
+                  if (oldImageUrl && oldImageUrl.startsWith("blob:")) {
+                    URL.revokeObjectURL(oldImageUrl);
+                  }
+                  newMap.delete(oldFilename);
                 }
+                // Add new image
                 newMap.set(filename, newImageUrl);
                 return newMap;
               });
 
-              // Update the item's image field in the data if needed
-              if (needsDataUpdate) {
-                setData((prevData) => {
-                  const newData = [...prevData];
-                  // Find item by type (primary key) or actualIndex
-                  const itemIndex = newData.findIndex(
-                    (d) =>
-                      (item.type && d.type === item.type) ||
-                      (item.actualIndex !== undefined &&
-                        d.actualIndex === item.actualIndex)
-                  );
-                  if (itemIndex !== -1) {
-                    newData[itemIndex] = {
-                      ...newData[itemIndex],
-                      image: filename,
-                    };
-                    // Save updated item to IndexedDB
-                    saveItemToDB(
-                      newData[itemIndex],
-                      "image",
-                      activeInventoryId
-                    );
-                  }
-                  return newData;
-                });
-              }
+              // Always update the item's image field to the new filename
+              setData((prevData) => {
+                const newData = [...prevData];
+                // Find item by type (primary key) or actualIndex
+                const itemIndex = newData.findIndex(
+                  (d) =>
+                    (item.type && d.type === item.type) ||
+                    (item.actualIndex !== undefined &&
+                      d.actualIndex === item.actualIndex)
+                );
+                if (itemIndex !== -1) {
+                  newData[itemIndex] = {
+                    ...newData[itemIndex],
+                    image: filename,
+                  };
+                  // Save updated item to IndexedDB with new image filename
+                  saveItemToDB(newData[itemIndex], "image", activeInventoryId);
+                }
+                return newData;
+              });
 
               // Save to IndexedDB
               const imageFileMap = new Map();
@@ -3747,13 +4116,149 @@
           loadedFileMap
         ) => {
           try {
-            // Load existing data from IndexedDB
-            const {
-              items: existingItems,
-              imageMap: existingImageMap,
-              embeddingsMap: existingEmbeddingsMap,
-            } = await loadFromIndexedDB();
+            // Load existing items from current inventory
+            if (!activeInventoryId) {
+              alert(
+                "No active inventory selected. Please select an inventory first."
+              );
+              return;
+            }
 
+            const existingItems = await loadInventoryItems(activeInventoryId);
+
+            // Get existing image map (use state if available, otherwise load from IndexedDB)
+            let existingImageMap = imageMap;
+            if (!existingImageMap) {
+              const imageBlobs = await getImagesFromIndexedDB();
+              existingImageMap = new Map();
+              for (const [filename, blob] of imageBlobs.entries()) {
+                existingImageMap.set(filename, URL.createObjectURL(blob));
+              }
+            }
+
+            // Create maps for efficient lookup using TYPE
+            const existingItemsMap = new Map(
+              existingItems.map((item) => [item.type, item])
+            );
+            const existingImageFilenames = new Set(existingImageMap.keys());
+
+            // Detect conflicts
+            const conflicts = [];
+            for (const newItem of loadedData) {
+              const existingItem = existingItemsMap.get(newItem.type);
+              if (existingItem) {
+                // Check for conflicts in each field
+                // Convert to numbers for proper comparison
+                const newQuantity = Number(newItem.quantity) || 0;
+                const existingQuantity = Number(existingItem.quantity) || 0;
+                if (newQuantity !== existingQuantity) {
+                  conflicts.push({
+                    itemType: newItem.type,
+                    item: existingItem,
+                    field: "quantity",
+                    currentValue: existingQuantity,
+                    newValue: newQuantity,
+                  });
+                }
+
+                const newPrice = Number(newItem.price) || 0;
+                const existingPrice = Number(existingItem.price) || 0;
+                if (newPrice !== existingPrice) {
+                  conflicts.push({
+                    itemType: newItem.type,
+                    item: existingItem,
+                    field: "price",
+                    currentValue: existingPrice,
+                    newValue: newPrice,
+                  });
+                }
+
+                const newRarity = Number(newItem.rarity) || 0;
+                const existingRarity = Number(existingItem.rarity) || 0;
+                if (newRarity !== existingRarity) {
+                  conflicts.push({
+                    itemType: newItem.type,
+                    item: existingItem,
+                    field: "rarity",
+                    currentValue: existingRarity,
+                    newValue: newRarity,
+                  });
+                }
+
+                // Normalize image values - handle null, undefined, empty string
+                const newImage = newItem.image
+                  ? String(newItem.image).trim()
+                  : "";
+                const existingImage = existingItem.image
+                  ? String(existingItem.image).trim()
+                  : "";
+
+                // Detect image conflict if:
+                // 1. Both have images and they're different
+                // 2. Existing has image, new doesn't (would remove image)
+                // 3. Existing doesn't have image, new has one (would add image)
+                if (newImage !== existingImage && (newImage || existingImage)) {
+                  conflicts.push({
+                    itemType: newItem.type,
+                    item: existingItem,
+                    field: "image",
+                    currentValue: existingImage || "None",
+                    newValue: newImage || "None",
+                  });
+                }
+              }
+            }
+
+            // If conflicts exist, show modal
+            if (conflicts.length > 0) {
+              // Merge image maps for display in modal
+              const mergedImageMapForModal = new Map(existingImageMap);
+              for (const [filename, url] of loadedUrlMap.entries()) {
+                if (!mergedImageMapForModal.has(filename)) {
+                  mergedImageMapForModal.set(filename, url);
+                }
+              }
+
+              setConflictsData({
+                conflicts,
+                loadedData,
+                loadedUrlMap,
+                metadata,
+                loadedFileMap,
+                existingItems,
+                existingImageMap,
+                mergedImageMap: mergedImageMapForModal,
+              });
+              setShowConflictsModal(true);
+              return;
+            }
+
+            // No conflicts, proceed with update
+            await applyUpdateWithResolutions(
+              loadedData,
+              loadedUrlMap,
+              metadata,
+              loadedFileMap,
+              existingItems,
+              existingImageMap,
+              {}
+            );
+          } catch (e) {
+            console.error("Error updating inventory:", e);
+            alert(`Error updating inventory: ${e.message}`);
+          }
+        };
+
+        const applyUpdateWithResolutions = async (
+          loadedData,
+          loadedUrlMap,
+          metadata,
+          loadedFileMap,
+          existingItems,
+          existingImageMap,
+          resolutions = {}
+        ) => {
+          try {
             // Create maps for efficient lookup using TYPE
             const existingItemsMap = new Map(
               existingItems.map((item) => [item.type, item])
@@ -3771,12 +4276,55 @@
               const existingItem = existingItemsMap.get(newItem.type);
 
               if (existingItem) {
-                // Item exists - update quantity only, preserve price, rarity, and image
+                // Item exists - apply user resolutions
+                const quantityKey = `${newItem.type}-quantity`;
+                const priceKey = `${newItem.type}-price`;
+                const rarityKey = `${newItem.type}-rarity`;
+                const imageKey = `${newItem.type}-image`;
+
+                let finalQuantity = existingItem.quantity || 0;
+                if (resolutions[quantityKey] === "replace") {
+                  finalQuantity = newItem.quantity || 0;
+                } else if (resolutions[quantityKey] === "add") {
+                  finalQuantity =
+                    (existingItem.quantity || 0) + (newItem.quantity || 0);
+                }
+                // else "keep" - use existing
+
+                let finalPrice = existingItem.price || 0;
+                if (resolutions[priceKey] === "replace") {
+                  finalPrice = newItem.price || 0;
+                }
+                // else "keep" - use existing
+
+                let finalRarity = existingItem.rarity || 0;
+                if (resolutions[rarityKey] === "replace") {
+                  finalRarity = newItem.rarity || 0;
+                }
+                // else "keep" - use existing
+
+                let finalImage = existingItem.image || "";
+                if (resolutions[imageKey] === "replace") {
+                  finalImage = newItem.image || "";
+                  // Always add new image to file map if it exists (even if filename matches existing)
+                  // This ensures we save the new image file, overwriting any existing one
+                  if (newItem.image && loadedFileMap.has(newItem.image)) {
+                    newImageFileMap.set(
+                      newItem.image,
+                      loadedFileMap.get(newItem.image)
+                    );
+                  }
+                } else {
+                  // Keep existing image - but make sure it's in the finalImage
+                  finalImage = existingItem.image || "";
+                }
+
                 updatedItems.push({
                   ...existingItem,
-                  quantity: newItem.quantity || existingItem.quantity || 0,
-                  // Price and rarity are preserved from existingItem
-                  // Image is preserved from existingItem
+                  quantity: finalQuantity,
+                  price: finalPrice,
+                  rarity: finalRarity,
+                  image: finalImage,
                 });
                 // Don't add to itemsNeedingEmbeddings since we're not changing name
               } else {
@@ -3828,13 +4376,46 @@
 
             // Build merged image map
             const mergedImageMap = new Map(existingImageMap);
+
+            // Track which images are being replaced (from resolutions)
+            const replacedImageFilenames = new Set();
+            for (const newItem of loadedData) {
+              const existingItem = existingItemsMap.get(newItem.type);
+              if (existingItem) {
+                const imageKey = `${newItem.type}-image`;
+                if (resolutions[imageKey] === "replace" && newItem.image) {
+                  replacedImageFilenames.add(newItem.image);
+                }
+              }
+            }
+
+            // Update image map with new images from loadedUrlMap
+            // Always update if this image is being replaced or if it doesn't exist yet
             for (const [filename, url] of loadedUrlMap.entries()) {
-              if (!mergedImageMap.has(filename)) {
+              if (
+                replacedImageFilenames.has(filename) ||
+                !mergedImageMap.has(filename)
+              ) {
+                // Revoke old URL if it exists and is different
+                const oldUrl = mergedImageMap.get(filename);
+                if (oldUrl && oldUrl !== url && oldUrl.startsWith("blob:")) {
+                  URL.revokeObjectURL(oldUrl);
+                }
                 mergedImageMap.set(filename, url);
               }
             }
+
+            // Add any new image files that weren't in loadedUrlMap
             for (const [filename, file] of newImageFileMap.entries()) {
-              if (!mergedImageMap.has(filename)) {
+              if (
+                replacedImageFilenames.has(filename) ||
+                !mergedImageMap.has(filename)
+              ) {
+                // If replacing, revoke old URL first
+                const oldUrl = mergedImageMap.get(filename);
+                if (oldUrl && oldUrl.startsWith("blob:")) {
+                  URL.revokeObjectURL(oldUrl);
+                }
                 mergedImageMap.set(filename, URL.createObjectURL(file));
               }
             }
@@ -3888,6 +4469,32 @@
             console.error("Error updating inventory:", e);
             alert(`Error updating inventory: ${e.message}`);
           }
+        };
+
+        const handleApplyConflictsResolutions = async (resolutions) => {
+          if (!conflictsData) return;
+
+          const {
+            loadedData,
+            loadedUrlMap,
+            metadata,
+            loadedFileMap,
+            existingItems,
+            existingImageMap,
+          } = conflictsData;
+
+          await applyUpdateWithResolutions(
+            loadedData,
+            loadedUrlMap,
+            metadata,
+            loadedFileMap,
+            existingItems,
+            existingImageMap,
+            resolutions
+          );
+
+          // Clear conflicts data
+          setConflictsData(null);
         };
 
         const readFileAsText = (file) => {
@@ -5893,6 +6500,18 @@
               item={itemToAddToSublist}
               imageMap={imageMap}
               onAdd={handleAddItemToSublist}
+            />
+
+            <ConflictsResolutionModal
+              isOpen={showConflictsModal}
+              onClose={() => {
+                setShowConflictsModal(false);
+                setConflictsData(null);
+              }}
+              conflicts={conflictsData?.conflicts || []}
+              imageMap={conflictsData?.mergedImageMap || imageMap}
+              loadedUrlMap={conflictsData?.loadedUrlMap}
+              onApply={handleApplyConflictsResolutions}
             />
 
             <LoadingOverlay isVisible={isExporting} message="Exporting..." />
