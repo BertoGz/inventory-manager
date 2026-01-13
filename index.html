@@ -1058,7 +1058,7 @@
             );
         };
 
-        const ExportFormatModal = ({ isOpen, onClose, onSelectFormat }) => {
+        const ExportFormatModal = ({ isOpen, onClose, onSelectFormat, hasSublistSelected = false }) => {
             const [selectedFormat, setSelectedFormat] = useState(null);
             const [dataMetadataOptions, setDataMetadataOptions] = useState({
                 images: true,
@@ -1114,15 +1114,17 @@
                             select a format to export to
                         </p>
                         <div className="space-y-2 mb-6">
-                            <button
-                                onClick={() => setSelectedFormat("data")}
-                                className={`w-full text-left px-4 py-3 text-sm rounded-lg transition-colors border ${selectedFormat === "data"
-                                        ? "bg-blue-600 text-white border-blue-500"
-                                        : "text-slate-300 hover:bg-slate-800 border-slate-700 hover:border-slate-600"
-                                    }`}
-                            >
-                                Data
-                            </button>
+                            {!hasSublistSelected && (
+                                <button
+                                    onClick={() => setSelectedFormat("data")}
+                                    className={`w-full text-left px-4 py-3 text-sm rounded-lg transition-colors border ${selectedFormat === "data"
+                                            ? "bg-blue-600 text-white border-blue-500"
+                                            : "text-slate-300 hover:bg-slate-800 border-slate-700 hover:border-slate-600"
+                                        }`}
+                                >
+                                    Data
+                                </button>
+                            )}
                             <button
                                 onClick={() => setSelectedFormat("csv")}
                                 className={`w-full text-left px-4 py-3 text-sm rounded-lg transition-colors border ${selectedFormat === "csv"
@@ -1686,13 +1688,22 @@
 
             const handleExport = () => {
                 if (selectedIds.size > 0) {
-                    // Pass default metadata options (all enabled)
+                    // Check if any selected items are sublists
+                    const selectedItems = exportableItems.filter(item => selectedIds.has(item.id));
+                    const hasSublist = selectedItems.some(item => item.type === "sublist");
+                    
+                    // Find the sublist item if one is selected
+                    const sublistItem = selectedItems.find(item => item.type === "sublist");
+                    const sublistId = sublistItem ? sublistItem.id : null;
+                    const parentInventoryId = sublistItem && tabInventoryId ? tabInventoryId : null;
+                    
+                    // Pass default metadata options (all enabled) and sublist flag
                     onExport(Array.from(selectedIds), {
                         images: true,
                         quantity: true,
                         rarity: true,
                         prices: true,
-                    });
+                    }, hasSublist, sublistId, parentInventoryId);
                     setSelectedIds(new Set());
                     onClose();
                 }
@@ -3288,6 +3299,9 @@
                 useState(null);
             const [pendingExportTabInventoryId, setPendingExportTabInventoryId] =
                 useState(null);
+            const [hasSublistSelected, setHasSublistSelected] = useState(false);
+            const [pendingExportSublistId, setPendingExportSublistId] = useState(null);
+            const [pendingExportParentInventoryId, setPendingExportParentInventoryId] = useState(null);
             const [exportMetadataOptions, setExportMetadataOptions] = useState({
                 images: true,
                 quantity: true,
@@ -3308,6 +3322,8 @@
 
             // File input ref for update inventory
             const updateInventoryInputRef = useRef(null);
+            // File input ref for importing data
+            const importDataInputRef = useRef(null);
 
             // 0. Load from IndexedDB on mount - Multi-inventory system
             useEffect(() => {
@@ -4984,6 +5000,9 @@
                 }
             };
             const handleExportFor = () => {
+                setHasSublistSelected(false);
+                setPendingExportSublistId(null);
+                setPendingExportParentInventoryId(null);
                 setShowExportFormatModal(true);
             };
 
@@ -5201,7 +5220,10 @@
 
             const handleExportInventories = async (
                 inventoryIds,
-                metadataOptions
+                metadataOptions,
+                hasSublist = false,
+                sublistId = null,
+                parentInventoryId = null
             ) => {
                 // Store metadata options for use in export format handler
                 setExportMetadataOptions(
@@ -5212,8 +5234,18 @@
                         prices: true,
                     }
                 );
-                // Store selected inventory IDs for export
-                setPendingExportInventoryId(inventoryIds[0] || null);
+                // If exporting a sublist, don't set pendingExportInventoryId (we'll use parentInventoryId)
+                // Otherwise, store selected inventory IDs for export
+                if (!hasSublist) {
+                    setPendingExportInventoryId(inventoryIds[0] || null);
+                } else {
+                    setPendingExportInventoryId(null);
+                }
+                // Store whether a sublist is selected
+                setHasSublistSelected(hasSublist);
+                // Store sublist information if exporting a sublist
+                setPendingExportSublistId(sublistId);
+                setPendingExportParentInventoryId(parentInventoryId);
                 // Close export inventory modal and show format selection
                 setShowExportInventoryModal(false);
                 setShowExportFormatModal(true);
@@ -5223,6 +5255,229 @@
                 // Trigger file upload for current inventory
                 if (updateInventoryInputRef.current) {
                     updateInventoryInputRef.current.click();
+                }
+            };
+
+            const handleImportData = () => {
+                // Trigger file input for importing data
+                if (importDataInputRef.current) {
+                    importDataInputRef.current.click();
+                }
+            };
+
+            const handleImportFileSelect = async (e) => {
+                const file = e.target.files[0];
+                if (!file) {
+                    e.target.value = "";
+                    return;
+                }
+
+                if (hasStoredData || inventories.length > 0) {
+                    const confirmed = confirm(
+                        "⚠️ Warning: Importing a new file will replace all existing data.\n\n" +
+                        "Do you want to continue?"
+                    );
+                    if (!confirmed) {
+                        e.target.value = "";
+                        return;
+                    }
+                }
+
+                try {
+                    if (file.name.toLowerCase().endsWith(".db")) {
+                        // Import from database - reuse the logic from FileUploader
+                        let initSqlJs = window.initSqlJs;
+                        if (!initSqlJs) {
+                            await new Promise((resolve) => {
+                                let attempts = 0;
+                                const checkInterval = setInterval(() => {
+                                    attempts++;
+                                    if (window.initSqlJs) {
+                                        initSqlJs = window.initSqlJs;
+                                        clearInterval(checkInterval);
+                                        resolve();
+                                    } else if (attempts > 50) {
+                                        clearInterval(checkInterval);
+                                        resolve();
+                                    }
+                                }, 100);
+                            });
+                        }
+
+                        if (!initSqlJs) throw new Error("SQL.js library not loaded.");
+
+                        const arrayBuffer = await file.arrayBuffer();
+                        const SQL = await initSqlJs({
+                            locateFile: (file) => `https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/${file}`,
+                        });
+                        const db = new SQL.Database(new Uint8Array(arrayBuffer));
+
+                        // Check for full backup
+                        const tables = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='inventories'");
+
+                        if (tables.length > 0) {
+                            // Full restore mode
+                            try {
+                                console.log("Starting full restore...");
+                                await clearIndexedDB();
+                                const idb = await openDB();
+
+                                const restoreTable = async (sqlTable, idbStore, mapper) => {
+                                    const res = db.exec(`SELECT * FROM ${sqlTable}`);
+                                    if (res.length && res[0].values.length) {
+                                        const tx = idb.transaction(idbStore, 'readwrite');
+                                        const store = tx.objectStore(idbStore);
+                                        const cols = res[0].columns;
+
+                                        res[0].values.forEach(row => {
+                                            const obj = {};
+                                            cols.forEach((col, i) => obj[col] = row[i]);
+                                            const finalObj = mapper ? mapper(obj) : obj;
+                                            store.put(finalObj);
+                                        });
+                                        await new Promise(resolve => tx.oncomplete = resolve);
+                                    }
+                                };
+
+                                await restoreTable('inventories', STORE_INVENTORIES);
+                                await restoreTable('catalog', STORE_ITEM_CATALOG);
+                                await restoreTable('inventory_items', STORE_INVENTORY_ITEMS);
+                                await restoreTable('sublists', STORE_SUBLISTS, (obj) => ({
+                                    ...obj,
+                                    itemTypes: JSON.parse(obj.itemTypes || "[]")
+                                }));
+
+                                const imgRes = db.exec("SELECT * FROM images");
+                                if (imgRes.length && imgRes[0].values.length) {
+                                    const tx = idb.transaction(STORE_IMAGES, 'readwrite');
+                                    const store = tx.objectStore(STORE_IMAGES);
+                                    imgRes[0].values.forEach(row => {
+                                        const filename = row[0];
+                                        const data = row[1];
+                                        const blob = new Blob([data], { type: 'image/jpeg' });
+                                        store.put({ filename, blob });
+                                    });
+                                    await new Promise(resolve => tx.oncomplete = resolve);
+                                }
+
+                                const metaRes = db.exec("SELECT * FROM metadata");
+                                if (metaRes.length) {
+                                    const tx = idb.transaction(STORE_METADATA, 'readwrite');
+                                    metaRes[0].values.forEach(row => {
+                                        tx.objectStore(STORE_METADATA).put({ key: row[0], value: row[1] });
+                                    });
+                                }
+
+                                db.close();
+                                window.location.reload();
+                                return;
+                            } catch (e) {
+                                console.error("Full restore failed:", e);
+                                alert("Restore failed: " + e.message);
+                                db.close();
+                                return;
+                            }
+                        }
+
+                        // Legacy import mode
+                        const itemsResult = db.exec(
+                            "SELECT type, id, name, quantity, price, rarity, image, data FROM items"
+                        );
+                        if (!itemsResult || itemsResult.length === 0) {
+                            throw new Error("No items found in database.");
+                        }
+
+                        const items = [];
+                        const rows = itemsResult[0].values;
+                        const columns = itemsResult[0].columns;
+
+                        for (const row of rows) {
+                            const item = {};
+                            columns.forEach((col, idx) => {
+                                if (col === "data" && row[idx]) {
+                                    try {
+                                        const parsed = JSON.parse(row[idx]);
+                                        Object.assign(item, parsed);
+                                    } catch (e) {
+                                        item[col] = row[idx];
+                                    }
+                                } else {
+                                    item[col] = row[idx];
+                                }
+                            });
+                            items.push(item);
+                        }
+
+                        const imagesResult = db.exec("SELECT filename, data FROM images");
+                        const urlMap = new Map();
+                        const fileMap = new Map();
+
+                        if (imagesResult && imagesResult.length > 0) {
+                            const imageRows = imagesResult[0].values;
+                            const imageColumns = imagesResult[0].columns;
+                            const filenameIdx = imageColumns.indexOf("filename");
+                            const dataIdx = imageColumns.indexOf("data");
+
+                            for (const row of imageRows) {
+                                const filename = row[filenameIdx];
+                                const blobData = row[dataIdx];
+
+                                if (blobData) {
+                                    try {
+                                        let dataArray;
+                                        if (blobData instanceof Uint8Array) {
+                                            dataArray = blobData;
+                                        } else if (Array.isArray(blobData)) {
+                                            dataArray = new Uint8Array(blobData);
+                                        } else {
+                                            dataArray = new Uint8Array(blobData);
+                                        }
+
+                                        const blob = new Blob([dataArray], { type: "image/jpeg" });
+                                        urlMap.set(filename, URL.createObjectURL(blob));
+                                        fileMap.set(filename, blob);
+                                    } catch (err) {
+                                        console.warn(`Failed to load image ${filename}:`, err);
+                                    }
+                                }
+                            }
+                        }
+
+                        const metadataResult = db.exec(
+                            "SELECT value FROM metadata WHERE key = 'date'"
+                        );
+                        let metadata = null;
+                        if (
+                            metadataResult &&
+                            metadataResult.length > 0 &&
+                            metadataResult[0].values.length > 0
+                        ) {
+                            const dateValue = metadataResult[0].values[0][0];
+                            metadata = { Date: dateValue };
+                        }
+
+                        db.close();
+
+                        const enrichedData = items.map((item, idx) => ({
+                            type: item.type || item.id || `temp-${idx}`,
+                            id: item.id || `temp-${idx}`,
+                            ...item,
+                            name: item.name || "Unknown Item",
+                            image: item.image || "",
+                            quantity: item.quantity || 0,
+                            price: item.price || 0,
+                            rarity: item.rarity !== undefined ? item.rarity : 0,
+                        }));
+
+                        await handleDataLoaded(enrichedData, urlMap, metadata, fileMap);
+                    } else {
+                        throw new Error("Please select a .db file.");
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert("Import failed: " + err.message);
+                } finally {
+                    e.target.value = "";
                 }
             };
 
@@ -5377,8 +5632,33 @@
                     let exportData = data;
                     let inventoryIdToExport = null;
 
-                    // If exporting from inventory modal, load that inventory's data
-                    if (pendingExportInventoryId) {
+                    // If exporting a sublist, filter items by sublist's itemTypes
+                    if (pendingExportSublistId && pendingExportParentInventoryId) {
+                        // Load the parent inventory's items
+                        inventoryIdToExport = pendingExportParentInventoryId;
+                        const allItems = await loadInventoryItems(pendingExportParentInventoryId);
+                        
+                        // Load the sublist to get its itemTypes
+                        const db = await openDB();
+                        const tx = db.transaction([STORE_SUBLISTS], "readonly");
+                        const sublistsStore = tx.objectStore(STORE_SUBLISTS);
+                        const sublist = await new Promise((resolve, reject) => {
+                            const req = sublistsStore.get(pendingExportSublistId);
+                            req.onsuccess = () => resolve(req.result);
+                            req.onerror = () => reject(req.error);
+                        });
+                        
+                        if (sublist && sublist.itemTypes && sublist.itemTypes.length > 0) {
+                            // Filter items to only include those in the sublist
+                            exportData = allItems.filter(item => 
+                                item.type && sublist.itemTypes.includes(item.type)
+                            );
+                        } else {
+                            // Empty sublist
+                            exportData = [];
+                        }
+                    } else if (pendingExportInventoryId) {
+                        // If exporting from inventory modal, load that inventory's data
                         inventoryIdToExport = pendingExportInventoryId;
                         exportData = await loadInventoryItems(pendingExportInventoryId);
                     } else if (!exportData) {
@@ -5437,6 +5717,9 @@
                     alert(`Error exporting to ${format}: ${e.message}`);
                 } finally {
                     setIsExporting(false);
+                    // Reset sublist export state
+                    setPendingExportSublistId(null);
+                    setPendingExportParentInventoryId(null);
                 }
             };
 
@@ -6350,23 +6633,12 @@
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         setShowAddButtonMenu(false);
-                                                        handleOpenInventory();
+                                                        handleImportData();
                                                     }}
                                                     className="w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 flex items-center gap-2"
                                                 >
-                                                    <FolderOpen className="w-4 h-4" />
-                                                    Open Inventory
-                                                </button>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setShowAddButtonMenu(false);
-                                                        handleNewInventory();
-                                                    }}
-                                                    className="w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 flex items-center gap-2"
-                                                >
-                                                    <Plus className="w-4 h-4" />
-                                                    New Inventory
+                                                    <FileText className="w-4 h-4" />
+                                                    Import data
                                                 </button>
                                             </div>
                                         )}
@@ -6457,13 +6729,60 @@
                                             </div>
                                         )}
                                     </div>
-                                    <button
-                                        onClick={handleUploadToCurrentInventory}
-                                        className="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors flex items-center gap-2"
-                                        title="Upload items to current inventory"
-                                    >
-                                        <span className="text-lg">+</span>
-                                    </button>
+                                    <div className="relative">
+                                        <button
+                                            className="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors flex items-center gap-2 add-button-menu-button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                const spacing = 4;
+                                                const menuHeight = 50;
+                                                const menuWidth = 180;
+
+                                                let top = rect.bottom + spacing;
+                                                let left = rect.left;
+
+                                                if (top + menuHeight > window.innerHeight) {
+                                                    top = rect.top - menuHeight - spacing;
+                                                }
+
+                                                if (left + menuWidth > window.innerWidth) {
+                                                    left = window.innerWidth - menuWidth - 8;
+                                                }
+
+                                                if (left < 8) left = 8;
+                                                if (top < 8) top = 8;
+
+                                                setAddButtonMenuPosition({ top, left });
+                                                setShowAddButtonMenu(true);
+                                            }}
+                                            title="Import data"
+                                        >
+                                            <span className="text-lg">+</span>
+                                        </button>
+                                        {showAddButtonMenu && (
+                                            <div
+                                                className="add-button-menu fixed z-[9999] bg-slate-800 border border-slate-700 rounded-lg shadow-xl min-w-[180px] overflow-hidden"
+                                                style={{
+                                                    top: `${addButtonMenuPosition.top}px`,
+                                                    left: `${addButtonMenuPosition.left}px`,
+                                                }}
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setShowAddButtonMenu(false);
+                                                        handleImportData();
+                                                    }}
+                                                    className="w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 flex items-center gap-2"
+                                                >
+                                                    <FileText className="w-4 h-4" />
+                                                    Import data
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
 
@@ -6753,6 +7072,7 @@
                         isOpen={showExportFormatModal}
                         onClose={() => setShowExportFormatModal(false)}
                         onSelectFormat={handleExportFormat}
+                        hasSublistSelected={hasSublistSelected}
                     />
 
                     <Modal
@@ -6786,6 +7106,15 @@
                         webkitdirectory=""
                         directory=""
                         onChange={handleUpdateInventoryFileSelect}
+                    />
+                    
+                    {/* Hidden file input for importing data */}
+                    <input
+                        ref={importDataInputRef}
+                        type="file"
+                        accept=".db"
+                        style={{ display: "none" }}
+                        onChange={handleImportFileSelect}
                     />
 
                     {/* Modals */}
