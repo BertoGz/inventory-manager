@@ -2285,6 +2285,7 @@
 
         const FileUploader = ({ onDataLoaded, hasExistingData }) => {
             const [loading, setLoading] = useState(false);
+            const [importProgress, setImportProgress] = useState(0);
             const [error, setError] = useState(null);
             const folderInputRef = useRef(null);
             const fileInputRef = useRef(null);
@@ -2446,6 +2447,7 @@
                 }
 
                 setLoading(true);
+                setImportProgress(0);
                 setError(null);
 
                 try {
@@ -2459,11 +2461,13 @@
                     setError(err.message);
                 } finally {
                     setLoading(false);
+                    setImportProgress(0);
                     e.target.value = "";
                 }
             };
 
             const importFromDatabase = async (dbFile) => {
+                setImportProgress(5);
                 let initSqlJs = window.initSqlJs;
                 if (!initSqlJs) {
                     await new Promise((resolve) => {
@@ -2484,15 +2488,19 @@
 
                 if (!initSqlJs) throw new Error("SQL.js library not loaded.");
 
+                setImportProgress(10);
                 const arrayBuffer = await dbFile.arrayBuffer();
+                setImportProgress(20);
                 const SQL = await initSqlJs({
                     locateFile: (file) => `https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/${file}`,
                 });
                 const db = new SQL.Database(new Uint8Array(arrayBuffer));
+                setImportProgress(30);
 
                 // --- CHECK FOR FULL BACKUP (Multi-Inventory) ---
                 // We check if the 'inventories' table exists in the file
                 const tables = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='inventories'");
+                setImportProgress(35);
 
                 if (tables.length > 0) {
                     // --- FULL RESTORE MODE ---
@@ -2500,8 +2508,11 @@
 
                     try {
                         console.log("Starting full restore...");
+                        setImportProgress(40);
                         await clearIndexedDB(); // Wipe current state
+                        setImportProgress(50);
                         const idb = await openDB();
+                        setImportProgress(55);
 
                         // Helper to read SQL table and write to IndexedDB
                         const restoreTable = async (sqlTable, idbStore, mapper) => {
@@ -2525,21 +2536,26 @@
                         };
 
                         // 1. Restore Inventories
+                        setImportProgress(60);
                         await restoreTable('inventories', STORE_INVENTORIES);
 
                         // 2. Restore Catalog
+                        setImportProgress(65);
                         await restoreTable('catalog', STORE_ITEM_CATALOG);
 
                         // 3. Restore Inventory Items
+                        setImportProgress(70);
                         await restoreTable('inventory_items', STORE_INVENTORY_ITEMS);
 
                         // 4. Restore Sublists (Parse itemTypes string back to array)
+                        setImportProgress(75);
                         await restoreTable('sublists', STORE_SUBLISTS, (obj) => ({
                             ...obj,
                             itemTypes: JSON.parse(obj.itemTypes || "[]")
                         }));
 
                         // 5. Restore Images
+                        setImportProgress(80);
                         const imgRes = db.exec("SELECT * FROM images");
                         if (imgRes.length && imgRes[0].values.length) {
                             const tx = idb.transaction(STORE_IMAGES, 'readwrite');
@@ -2555,6 +2571,7 @@
                         }
 
                         // 6. Restore Metadata
+                        setImportProgress(90);
                         const metaRes = db.exec("SELECT * FROM metadata");
                         if (metaRes.length) {
                             const tx = idb.transaction(STORE_METADATA, 'readwrite');
@@ -2563,6 +2580,7 @@
                             });
                         }
 
+                        setImportProgress(100);
                         db.close();
 
                         window.location.reload(); // Reload to reflect full state change
@@ -2579,6 +2597,7 @@
                 // --- LEGACY IMPORT MODE (Single Inventory) ---
                 // Falls back to this if 'inventories' table is missing
 
+                setImportProgress(40);
                 const itemsResult = db.exec(
                     "SELECT type, id, name, quantity, price, rarity, image, data FROM items"
                 );
@@ -2586,6 +2605,7 @@
                     throw new Error("No items found in database.");
                 }
 
+                setImportProgress(50);
                 const items = [];
                 const rows = itemsResult[0].values;
                 const columns = itemsResult[0].columns;
@@ -2607,6 +2627,7 @@
                     items.push(item);
                 }
 
+                setImportProgress(60);
                 const imagesResult = db.exec("SELECT filename, data FROM images");
                 const urlMap = new Map();
                 const fileMap = new Map();
@@ -2642,6 +2663,7 @@
                     }
                 }
 
+                setImportProgress(75);
                 const metadataResult = db.exec(
                     "SELECT value FROM metadata WHERE key = 'date'"
                 );
@@ -2655,6 +2677,7 @@
                     metadata = { Date: dateValue };
                 }
 
+                setImportProgress(85);
                 db.close();
 
                 const enrichedData = items.map((item, idx) => ({
@@ -2668,11 +2691,13 @@
                     rarity: item.rarity !== undefined ? item.rarity : 0,
                 }));
 
+                setImportProgress(90);
                 // Await onDataLoaded to ensure it completes before returning
                 const result = onDataLoaded(enrichedData, urlMap, metadata, fileMap);
                 if (result && typeof result.then === 'function') {
                     await result;
                 }
+                setImportProgress(100);
             };
             return (
                 <div className="flex flex-col items-center justify-center h-full space-y-6 p-8 text-center bg-slate-950 text-slate-100 animate-in fade-in duration-700">
@@ -2686,9 +2711,20 @@
                         </p>
 
                         {loading ? (
-                            <div className="flex flex-col items-center justify-center py-12">
+                            <div className="flex flex-col items-center justify-center py-12 w-full">
                                 <RefreshCw className="w-12 h-12 text-blue-500 animate-spin mb-4" />
-                                <span className="text-slate-300">Processing Data...</span>
+                                <span className="text-slate-300 mb-4">Processing Data...</span>
+                                <div className="w-full max-w-md">
+                                    <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-blue-500 transition-all duration-300"
+                                            style={{ width: `${importProgress}%` }}
+                                        />
+                                    </div>
+                                    <p className="text-xs text-slate-500 mt-2 text-center">
+                                        {importProgress}%
+                                    </p>
+                                </div>
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
