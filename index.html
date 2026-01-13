@@ -2326,7 +2326,11 @@
                     const text = await readFileAsText(dataFile);
                     const { data: enrichedData, metadata } = parseAndEnrichData(text);
 
-                    onDataLoaded(enrichedData, urlMap, metadata, fileMap);
+                    // Await onDataLoaded to ensure it completes before returning
+                    const result = onDataLoaded(enrichedData, urlMap, metadata, fileMap);
+                    if (result && typeof result.then === 'function') {
+                        await result;
+                    }
                 } catch (err) {
                     console.error(err);
                     setError(err.message);
@@ -2653,7 +2657,11 @@
                     rarity: item.rarity !== undefined ? item.rarity : 0,
                 }));
 
-                onDataLoaded(enrichedData, urlMap, metadata, fileMap);
+                // Await onDataLoaded to ensure it completes before returning
+                const result = onDataLoaded(enrichedData, urlMap, metadata, fileMap);
+                if (result && typeof result.then === 'function') {
+                    await result;
+                }
             };
             return (
                 <div className="flex flex-col items-center justify-center h-full space-y-6 p-8 text-center bg-slate-950 text-slate-100 animate-in fade-in duration-700">
