@@ -2068,22 +2068,6 @@
                 >
                   Replace All
                 </button>
-                {conflicts.some((c) => c.field === "quantity") && (
-                  <button
-                    onClick={() => {
-                      const newResolutions = {};
-                      conflicts.forEach((conflict) => {
-                        const key = `${conflict.itemType}-${conflict.field}`;
-                        newResolutions[key] =
-                          conflict.field === "quantity" ? "add" : "replace";
-                      });
-                      setResolutions(newResolutions);
-                    }}
-                    className="px-3 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors"
-                  >
-                    Add Quantities, Replace Others
-                  </button>
-                )}
               </div>
 
               <div className="flex-1 overflow-y-auto mb-4">
@@ -2172,26 +2156,6 @@
                                             }`}
                                           >
                                             Replace ({conflict.newValue})
-                                          </button>
-                                          <button
-                                            onClick={() =>
-                                              handleResolutionChange(
-                                                conflict.itemType,
-                                                conflict.field,
-                                                "add"
-                                              )
-                                            }
-                                            className={`px-2 py-1 text-xs rounded transition-colors ${
-                                              resolution === "add"
-                                                ? "bg-blue-600 text-white"
-                                                : "bg-slate-700 text-slate-300 hover:bg-slate-600"
-                                            }`}
-                                          >
-                                            Add ({conflict.currentValue} +{" "}
-                                            {conflict.newValue} ={" "}
-                                            {conflict.currentValue +
-                                              conflict.newValue}
-                                            )
                                           </button>
                                         </>
                                       ) : conflict.field === "image" ? (
@@ -2379,17 +2343,6 @@
         }, []);
 
         const handleFolderSelect = async (e) => {
-          if (hasExistingData) {
-            const confirmed = confirm(
-              "⚠️ Warning: Uploading a new file will replace all existing data.\n\n" +
-                "Do you want to continue?"
-            );
-            if (!confirmed) {
-              e.target.value = "";
-              return;
-            }
-          }
-
           setLoading(true);
           setError(null);
 
@@ -2519,17 +2472,6 @@
           if (!file) {
             e.target.value = "";
             return;
-          }
-
-          if (hasExistingData) {
-            const confirmed = confirm(
-              "⚠️ Warning: Importing a new file will replace all existing data.\n\n" +
-                "Do you want to continue?"
-            );
-            if (!confirmed) {
-              e.target.value = "";
-              return;
-            }
           }
 
           setLoading(true);
@@ -3372,11 +3314,16 @@
           bottom: 0,
           left: 0,
         }); // Position for context menu
-        const [showAddButtonMenu, setShowAddButtonMenu] = useState(false); // Whether add button menu is open
+        const [showAddButtonMenu, setShowAddButtonMenu] = useState(false); // Whether tab bar add button menu is open
         const [addButtonMenuPosition, setAddButtonMenuPosition] = useState({
           top: 0,
           left: 0,
-        }); // Position for add button context menu
+        }); // Position for tab bar add button context menu
+        const [showSearchBarMenu, setShowSearchBarMenu] = useState(false); // Whether search bar add button menu is open
+        const [searchBarMenuPosition, setSearchBarMenuPosition] = useState({
+          top: 0,
+          left: 0,
+        }); // Position for search bar add button context menu
 
         // Split View State
         const [isSplitView, setIsSplitView] = useState(false);
@@ -3754,8 +3701,19 @@
             ) {
               setShowAddButtonMenu(false);
             }
+            if (
+              showSearchBarMenu &&
+              !event.target.closest(".add-button-menu") &&
+              !event.target.closest(".add-button-menu-button")
+            ) {
+              setShowSearchBarMenu(false);
+            }
           };
-          if (openTabMenuId !== null || showAddButtonMenu) {
+          if (
+            openTabMenuId !== null ||
+            showAddButtonMenu ||
+            showSearchBarMenu
+          ) {
             // Use setTimeout to avoid immediate closure when opening
             setTimeout(() => {
               document.addEventListener("click", handleClickOutside);
@@ -3764,7 +3722,7 @@
               document.removeEventListener("click", handleClickOutside);
             };
           }
-        }, [openTabMenuId, showAddButtonMenu]);
+        }, [openTabMenuId, showAddButtonMenu, showSearchBarMenu]);
 
         // Handlers
         const handleDataLoaded = async (
@@ -5510,17 +5468,6 @@
             return;
           }
 
-          if (hasStoredData || inventories.length > 0) {
-            const confirmed = confirm(
-              "⚠️ Warning: Importing a new file will replace all existing data.\n\n" +
-                "Do you want to continue?"
-            );
-            if (!confirmed) {
-              e.target.value = "";
-              return;
-            }
-          }
-
           try {
             if (file.name.toLowerCase().endsWith(".db")) {
               // Import from database - reuse the logic from FileUploader
@@ -5715,9 +5662,91 @@
                 rarity: item.rarity !== undefined ? item.rarity : 0,
               }));
 
-              await handleDataLoaded(enrichedData, urlMap, metadata, fileMap);
+              // Check if we should use conflict resolution (if there's an existing inventory with items)
+              let targetInventoryId = activeInventoryId;
+              if (!targetInventoryId && inventories.length > 0) {
+                targetInventoryId = inventories[0].id;
+              }
+
+              if (targetInventoryId) {
+                const existingItems = await loadInventoryItems(
+                  targetInventoryId
+                );
+                if (existingItems && existingItems.length > 0) {
+                  // Use update handler which checks for conflicts
+                  if (!activeInventoryId) {
+                    setActiveInventoryId(targetInventoryId);
+                    if (!openInventoryIds.includes(targetInventoryId)) {
+                      setOpenInventoryIds([targetInventoryId]);
+                    }
+                  }
+                  await handleUpdateInventoryData(
+                    enrichedData,
+                    urlMap,
+                    metadata,
+                    fileMap
+                  );
+                } else {
+                  // Empty inventory, use handleDataLoaded
+                  await handleDataLoaded(
+                    enrichedData,
+                    urlMap,
+                    metadata,
+                    fileMap
+                  );
+                }
+              } else {
+                // No inventory exists, use handleDataLoaded
+                await handleDataLoaded(enrichedData, urlMap, metadata, fileMap);
+              }
+            } else if (file.name.toLowerCase().endsWith(".txt")) {
+              // Import from .txt file (furniture_data.txt)
+              const text = await readFileAsText(file);
+              const { data: enrichedData, metadata } = parseAndEnrichData(text);
+
+              // No images for single .txt file import
+              const urlMap = new Map();
+              const fileMap = new Map();
+
+              // Check if we should use conflict resolution (if there's an existing inventory with items)
+              let targetInventoryId = activeInventoryId;
+              if (!targetInventoryId && inventories.length > 0) {
+                targetInventoryId = inventories[0].id;
+              }
+
+              if (targetInventoryId) {
+                const existingItems = await loadInventoryItems(
+                  targetInventoryId
+                );
+                if (existingItems && existingItems.length > 0) {
+                  // Use update handler which checks for conflicts
+                  if (!activeInventoryId) {
+                    setActiveInventoryId(targetInventoryId);
+                    if (!openInventoryIds.includes(targetInventoryId)) {
+                      setOpenInventoryIds([targetInventoryId]);
+                    }
+                  }
+                  await handleUpdateInventoryData(
+                    enrichedData,
+                    urlMap,
+                    metadata,
+                    fileMap
+                  );
+                } else {
+                  // Empty inventory, use handleDataLoaded
+                  await handleDataLoaded(
+                    enrichedData,
+                    urlMap,
+                    metadata,
+                    fileMap
+                  );
+                }
+              } else {
+                // No inventory exists, use handleDataLoaded
+                await handleDataLoaded(enrichedData, urlMap, metadata, fileMap);
+              }
             } else {
-              throw new Error("Please select a .db file.");
+              throw new Error("Please select a .db or .txt file.");
             }
           } catch (err) {
             console.error(err);
@@ -6904,12 +6933,23 @@
                             onClick={(e) => {
                               e.stopPropagation();
                               setShowAddButtonMenu(false);
-                              handleImportData();
+                              handleOpenInventory();
                             }}
                             className="w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 flex items-center gap-2"
                           >
-                            <FileText className="w-4 h-4" />
-                            Import data
+                            <FolderOpen className="w-4 h-4" />
+                            Open Inventory
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowAddButtonMenu(false);
+                              handleNewInventory();
+                            }}
+                            className="w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 flex items-center gap-2"
+                          >
+                            <Plus className="w-4 h-4" />
+                            New Inventory
                           </button>
                         </div>
                       )}
@@ -7025,26 +7065,26 @@
                           if (left < 8) left = 8;
                           if (top < 8) top = 8;
 
-                          setAddButtonMenuPosition({ top, left });
-                          setShowAddButtonMenu(true);
+                          setSearchBarMenuPosition({ top, left });
+                          setShowSearchBarMenu(true);
                         }}
                         title="Import data"
                       >
                         <span className="text-lg">+</span>
                       </button>
-                      {showAddButtonMenu && (
+                      {showSearchBarMenu && (
                         <div
                           className="add-button-menu fixed z-[9999] bg-slate-800 border border-slate-700 rounded-lg shadow-xl min-w-[180px] overflow-hidden"
                           style={{
-                            top: `${addButtonMenuPosition.top}px`,
-                            left: `${addButtonMenuPosition.left}px`,
+                            top: `${searchBarMenuPosition.top}px`,
+                            left: `${searchBarMenuPosition.left}px`,
                           }}
                           onClick={(e) => e.stopPropagation()}
                         >
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              setShowAddButtonMenu(false);
+                              setShowSearchBarMenu(false);
                               handleImportData();
                             }}
                             className="w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 flex items-center gap-2"
@@ -7384,7 +7424,7 @@
             <input
               ref={importDataInputRef}
               type="file"
-              accept=".db"
+              accept=".db,.txt"
               style={{ display: "none" }}
               onChange={handleImportFileSelect}
             />
