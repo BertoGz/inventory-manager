@@ -2484,7 +2484,11 @@
             ) {
               return {
                 data: obj.data,
-                meta: { timestamp: obj.timestamp, Date: obj.Date },
+                meta: { 
+                  timestamp: obj.timestamp, 
+                  Date: obj.Date,
+                  username: obj.username || obj.userName || obj.user_name || null
+                },
               };
             }
             return null;
@@ -3364,6 +3368,7 @@
         const [inventories, setInventories] = useState([]); // All inventories
         const [openInventoryIds, setOpenInventoryIds] = useState([]); // IDs of open tabs
         const [activeInventoryId, setActiveInventoryId] = useState(null); // Currently active inventory
+        const [username, setUsername] = useState(null); // Username from inventory_data.txt
         const [openTabMenuId, setOpenTabMenuId] = useState(null); // ID of tab with open context menu
         const [menuPosition, setMenuPosition] = useState({
           bottom: 0,
@@ -3464,6 +3469,12 @@
         useEffect(() => {
           const loadData = async () => {
             try {
+              // Load username from localStorage
+              const savedUsername = localStorage.getItem("inventory_username");
+              if (savedUsername) {
+                setUsername(savedUsername);
+              }
+              
               // Load all inventories
               const loadedInventories = await loadInventories();
               setInventories(loadedInventories);
@@ -3835,6 +3846,7 @@
           try {
             // If no active inventory, create one or use existing
             let targetInventoryId = activeInventoryId;
+            let isFirstTime = false;
 
             if (!targetInventoryId) {
               // Check if any inventories exist
@@ -3847,7 +3859,8 @@
                   setOpenInventoryIds([targetInventoryId]);
                 }
               } else {
-                // Create new inventory
+                // Create new inventory - this is first time loading
+                isFirstTime = true;
                 const newInventory = await createInventory("Inventory 1");
                 targetInventoryId = newInventory.id;
                 const updatedInventories = await loadInventories();
@@ -3855,6 +3868,12 @@
                 setActiveInventoryId(targetInventoryId);
                 setOpenInventoryIds([targetInventoryId]);
               }
+            }
+
+            // Save username if this is first time loading and username exists in metadata
+            if (isFirstTime && metadata && metadata.username) {
+              localStorage.setItem("inventory_username", metadata.username);
+              setUsername(metadata.username);
             }
 
             // Load existing items for current inventory
@@ -5009,7 +5028,11 @@
             ) {
               return {
                 data: obj.data,
-                meta: { timestamp: obj.timestamp, Date: obj.Date },
+                meta: { 
+                  timestamp: obj.timestamp, 
+                  Date: obj.Date,
+                  username: obj.username || obj.userName || obj.user_name || null
+                },
               };
             }
             return null;
@@ -6835,6 +6858,11 @@
                   <h1 className="text-lg font-bold tracking-tight text-white">
                     Inventory Manager
                   </h1>
+                  {username && (
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {username}
+                    </p>
+                  )}
                 </div>
               </div>
               {/*only show buttons if inventory is open*/}
