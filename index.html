@@ -991,18 +991,21 @@
       }
 
       // Save open tabs to IndexedDB
-      async function saveOpenTabsToIndexedDB(openInventoryIds, activeInventoryId) {
+      async function saveOpenTabsToIndexedDB(
+        openInventoryIds,
+        activeInventoryId
+      ) {
         try {
           const db = await openDB();
           const tx = db.transaction([STORE_METADATA], "readwrite");
           const metadataStore = tx.objectStore(STORE_METADATA);
-          
+
           // Save open inventory IDs
           metadataStore.put({
             key: "openInventoryIds",
             value: JSON.stringify(openInventoryIds),
           });
-          
+
           // Save active inventory ID
           metadataStore.put({
             key: "activeInventoryId",
@@ -1024,7 +1027,7 @@
           const db = await openDB();
           const tx = db.transaction([STORE_METADATA], "readonly");
           const metadataStore = tx.objectStore(STORE_METADATA);
-          
+
           const [openIdsRecord, activeIdRecord] = await Promise.all([
             new Promise((resolve, reject) => {
               const req = metadataStore.get("openInventoryIds");
@@ -3475,17 +3478,20 @@
 
               if (loadedInventories.length > 0) {
                 // Load saved open tabs
-                const { openInventoryIds: savedOpenIds, activeInventoryId: savedActiveId } = 
-                  await loadOpenTabsFromIndexedDB();
+                const {
+                  openInventoryIds: savedOpenIds,
+                  activeInventoryId: savedActiveId,
+                } = await loadOpenTabsFromIndexedDB();
 
                 // Validate saved tabs exist in loaded inventories
-                const validOpenIds = savedOpenIds.filter(id => 
-                  loadedInventories.some(inv => inv.id === id)
+                const validOpenIds = savedOpenIds.filter((id) =>
+                  loadedInventories.some((inv) => inv.id === id)
                 );
-                const validActiveId = savedActiveId && 
-                  loadedInventories.some(inv => inv.id === savedActiveId)
-                  ? savedActiveId
-                  : null;
+                const validActiveId =
+                  savedActiveId &&
+                  loadedInventories.some((inv) => inv.id === savedActiveId)
+                    ? savedActiveId
+                    : null;
 
                 // Use saved tabs if valid, otherwise fallback to first inventory
                 let targetInventoryId;
@@ -3561,12 +3567,20 @@
         useEffect(() => {
           // Skip saving during initial load
           if (isLoadingFromDB) return;
-          
+
           // Only save if we have inventories loaded
-          if (inventories.length > 0 && (openInventoryIds.length > 0 || activeInventoryId)) {
+          if (
+            inventories.length > 0 &&
+            (openInventoryIds.length > 0 || activeInventoryId)
+          ) {
             saveOpenTabsToIndexedDB(openInventoryIds, activeInventoryId);
           }
-        }, [openInventoryIds, activeInventoryId, inventories.length, isLoadingFromDB]);
+        }, [
+          openInventoryIds,
+          activeInventoryId,
+          inventories.length,
+          isLoadingFromDB,
+        ]);
 
         // 1. Initialize Transformers Pipeline
         useEffect(() => {
@@ -7056,11 +7070,26 @@
                       <div className="p-1.5 bg-blue-900/20 rounded-lg text-blue-400">
                         <Package className="w-4 h-4" />
                       </div>
-                      <span className="font-bold text-sm uppercase tracking-wide text-slate-200 truncate">
-                        {inventories.find(
-                          (inv) => inv.id === leftPanelInventoryId
-                        )?.name || "Select Inventory"}
-                      </span>
+                      <div className="relative flex-1">
+                        <select
+                          className="w-full bg-transparent font-bold text-sm uppercase tracking-wide text-slate-200 outline-none cursor-pointer appearance-none"
+                          value={leftPanelInventoryId || ""}
+                          onChange={(e) =>
+                            handleLeftPanelInventoryChange(e.target.value)
+                          }
+                        >
+                          {inventories.map((inv) => (
+                            <option
+                              key={inv.id}
+                              value={inv.id}
+                              className="bg-slate-900 text-slate-300 capitalize"
+                            >
+                              {inv.name}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+                      </div>
                     </div>
                     <div className="w-1/2 flex items-center px-4 gap-3">
                       <div className="p-1.5 bg-purple-900/20 rounded-lg text-purple-400">
