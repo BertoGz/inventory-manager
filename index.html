@@ -990,6 +990,66 @@
         }
       }
 
+      // Save open tabs to IndexedDB
+      async function saveOpenTabsToIndexedDB(openInventoryIds, activeInventoryId) {
+        try {
+          const db = await openDB();
+          const tx = db.transaction([STORE_METADATA], "readwrite");
+          const metadataStore = tx.objectStore(STORE_METADATA);
+          
+          // Save open inventory IDs
+          metadataStore.put({
+            key: "openInventoryIds",
+            value: JSON.stringify(openInventoryIds),
+          });
+          
+          // Save active inventory ID
+          metadataStore.put({
+            key: "activeInventoryId",
+            value: activeInventoryId || "",
+          });
+
+          await new Promise((resolve, reject) => {
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          });
+        } catch (e) {
+          console.error("Error saving open tabs to IndexedDB:", e);
+        }
+      }
+
+      // Load open tabs from IndexedDB
+      async function loadOpenTabsFromIndexedDB() {
+        try {
+          const db = await openDB();
+          const tx = db.transaction([STORE_METADATA], "readonly");
+          const metadataStore = tx.objectStore(STORE_METADATA);
+          
+          const [openIdsRecord, activeIdRecord] = await Promise.all([
+            new Promise((resolve, reject) => {
+              const req = metadataStore.get("openInventoryIds");
+              req.onsuccess = () => resolve(req.result);
+              req.onerror = () => reject(req.error);
+            }),
+            new Promise((resolve, reject) => {
+              const req = metadataStore.get("activeInventoryId");
+              req.onsuccess = () => resolve(req.result);
+              req.onerror = () => reject(req.error);
+            }),
+          ]);
+
+          const openInventoryIds = openIdsRecord?.value
+            ? JSON.parse(openIdsRecord.value)
+            : [];
+          const activeInventoryId = activeIdRecord?.value || null;
+
+          return { openInventoryIds, activeInventoryId };
+        } catch (e) {
+          console.error("Error loading open tabs from IndexedDB:", e);
+          return { openInventoryIds: [], activeInventoryId: null };
+        }
+      }
+
       // --- Components ---
 
       const Modal = ({
@@ -3414,15 +3474,39 @@
               setInventories(loadedInventories);
 
               if (loadedInventories.length > 0) {
-                // Get first inventory or migrated inventory
-                const firstInventory = loadedInventories[0];
+                // Load saved open tabs
+                const { openInventoryIds: savedOpenIds, activeInventoryId: savedActiveId } = 
+                  await loadOpenTabsFromIndexedDB();
 
-                // Set as active and open
-                setActiveInventoryId(firstInventory.id);
-                setOpenInventoryIds([firstInventory.id]);
+                // Validate saved tabs exist in loaded inventories
+                const validOpenIds = savedOpenIds.filter(id => 
+                  loadedInventories.some(inv => inv.id === id)
+                );
+                const validActiveId = savedActiveId && 
+                  loadedInventories.some(inv => inv.id === savedActiveId)
+                  ? savedActiveId
+                  : null;
 
-                // Load items for first inventory
-                const items = await loadInventoryItems(firstInventory.id);
+                // Use saved tabs if valid, otherwise fallback to first inventory
+                let targetInventoryId;
+                let targetOpenIds;
+
+                if (validOpenIds.length > 0) {
+                  targetOpenIds = validOpenIds;
+                  targetInventoryId = validActiveId || validOpenIds[0];
+                } else {
+                  // Fallback to first inventory
+                  const firstInventory = loadedInventories[0];
+                  targetOpenIds = [firstInventory.id];
+                  targetInventoryId = firstInventory.id;
+                }
+
+                // Set active and open tabs
+                setActiveInventoryId(targetInventoryId);
+                setOpenInventoryIds(targetOpenIds);
+
+                // Load items for active inventory
+                const items = await loadInventoryItems(targetInventoryId);
                 if (items && items.length > 0) {
                   const indexedData = items.map((d, i) => ({
                     ...d,
@@ -3435,8 +3519,8 @@
                   setHasStoredData(false);
                 }
 
-                // Load sublists for first inventory
-                const loadedSublists = await loadSublists(firstInventory.id);
+                // Load sublists for active inventory
+                const loadedSublists = await loadSublists(targetInventoryId);
                 setSublists(loadedSublists);
                 setSelectedSublistId(null);
 
@@ -3472,6 +3556,17 @@
           };
           loadData();
         }, []);
+
+        // Save open tabs to IndexedDB whenever they change
+        useEffect(() => {
+          // Skip saving during initial load
+          if (isLoadingFromDB) return;
+          
+          // Only save if we have inventories loaded
+          if (inventories.length > 0 && (openInventoryIds.length > 0 || activeInventoryId)) {
+            saveOpenTabsToIndexedDB(openInventoryIds, activeInventoryId);
+          }
+        }, [openInventoryIds, activeInventoryId, inventories.length, isLoadingFromDB]);
 
         // 1. Initialize Transformers Pipeline
         useEffect(() => {
