@@ -512,6 +512,16 @@
         }
       }
 
+      async function getInventoryItemCount(inventoryId) {
+        try {
+          const items = await loadInventoryItems(inventoryId);
+          return items.reduce((total, item) => total + (item.quantity || 0), 0);
+        } catch (e) {
+          console.error("Error getting inventory item count:", e);
+          return 0;
+        }
+      }
+
       async function saveItemsToInventory(inventoryId, items) {
         try {
           const db = await openDB();
@@ -3368,6 +3378,7 @@
         const [inventories, setInventories] = useState([]); // All inventories
         const [openInventoryIds, setOpenInventoryIds] = useState([]); // IDs of open tabs
         const [activeInventoryId, setActiveInventoryId] = useState(null); // Currently active inventory
+        const [inventoryItemCounts, setInventoryItemCounts] = useState(new Map()); // Item counts per inventory
         const [username, setUsername] = useState(null); // Username from inventory_data.txt
         const [openTabMenuId, setOpenTabMenuId] = useState(null); // ID of tab with open context menu
         const [menuPosition, setMenuPosition] = useState({
@@ -3565,6 +3576,22 @@
           };
           loadData();
         }, []);
+
+        // Load item counts for all inventories
+        useEffect(() => {
+          if (inventories.length === 0) return;
+
+          const loadCounts = async () => {
+            const countsMap = new Map();
+            for (const inv of inventories) {
+              const count = await getInventoryItemCount(inv.id);
+              countsMap.set(inv.id, count);
+            }
+            setInventoryItemCounts(countsMap);
+          };
+
+          loadCounts();
+        }, [inventories, data]); // Recalculate when inventories or data changes
 
         // Save open tabs to IndexedDB whenever they change
         useEffect(() => {
@@ -3861,7 +3888,7 @@
               } else {
                 // Create new inventory - this is first time loading
                 isFirstTime = true;
-                const newInventory = await createInventory("Inventory 1");
+                const newInventory = await createInventory("All items");
                 targetInventoryId = newInventory.id;
                 const updatedInventories = await loadInventories();
                 setInventories(updatedInventories);
@@ -6911,6 +6938,7 @@
                     {openInventoryIds.map((tabId) => {
                       const inv = inventories.find((i) => i.id === tabId);
                       if (!inv) return null;
+                      const itemCount = inventoryItemCounts.get(tabId) || 0;
                       return (
                         <div
                           key={tabId}
@@ -6921,7 +6949,7 @@
                               : "bg-slate-900/30 text-slate-500 hover:bg-slate-900/50"
                           }`}
                         >
-                          <span className="truncate mr-2">{inv.name}</span>
+                          <span className="truncate mr-2">{inv.name} ({itemCount.toLocaleString()})</span>
                           <div className="relative">
                             <button
                               data-tab-menu-id={tabId}
@@ -7099,15 +7127,18 @@
                             handleLeftPanelInventoryChange(e.target.value)
                           }
                         >
-                          {inventories.map((inv) => (
-                            <option
-                              key={inv.id}
-                              value={inv.id}
-                              className="bg-slate-900 text-slate-300 capitalize"
-                            >
-                              {inv.name}
-                            </option>
-                          ))}
+                          {inventories.map((inv) => {
+                            const itemCount = inventoryItemCounts.get(inv.id) || 0;
+                            return (
+                              <option
+                                key={inv.id}
+                                value={inv.id}
+                                className="bg-slate-900 text-slate-300 capitalize"
+                              >
+                                {inv.name} ({itemCount.toLocaleString()})
+                              </option>
+                            );
+                          })}
                         </select>
                         <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
                       </div>
@@ -7124,15 +7155,18 @@
                             handleRightPanelInventoryChange(e.target.value)
                           }
                         >
-                          {inventories.map((inv) => (
-                            <option
-                              key={inv.id}
-                              value={inv.id}
-                              className="bg-slate-900 text-slate-300 capitalize"
-                            >
-                              {inv.name}
-                            </option>
-                          ))}
+                          {inventories.map((inv) => {
+                            const itemCount = inventoryItemCounts.get(inv.id) || 0;
+                            return (
+                              <option
+                                key={inv.id}
+                                value={inv.id}
+                                className="bg-slate-900 text-slate-300 capitalize"
+                              >
+                                {inv.name} ({itemCount.toLocaleString()})
+                              </option>
+                            );
+                          })}
                         </select>
                         <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
                       </div>
