@@ -229,6 +229,11 @@
           <line x1="3" y1="18" x2="3.01" y2="18" />
         </IconBase>
       );
+      const Filter = (props) => (
+        <IconBase {...props}>
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </IconBase>
+      );
 
       // --- Constants & Helpers ---
 
@@ -1417,6 +1422,350 @@
         );
       };
 
+      // Filter Modal
+      const FilterModal = ({
+        isOpen,
+        onClose,
+        filters,
+        onFiltersChange,
+        panel,
+      }) => {
+        const [localFilters, setLocalFilters] = useState(filters);
+
+        useEffect(() => {
+          if (isOpen) {
+            setLocalFilters(filters);
+          }
+        }, [isOpen, filters]);
+
+        if (!isOpen) return null;
+
+        const handleRarityToggle = (rarity) => {
+          setLocalFilters((prev) => ({
+            ...prev,
+            rarities: prev.rarities.includes(rarity)
+              ? prev.rarities.filter((r) => r !== rarity)
+              : [...prev.rarities, rarity],
+          }));
+        };
+
+        const handleApply = () => {
+          onFiltersChange(localFilters);
+          onClose();
+        };
+
+        const handleClear = () => {
+          const clearedFilters = {
+            rarities: [],
+            quantityMin: null,
+            quantityMax: null,
+            quantityMode: "all",
+            priceMin: null,
+            priceMax: null,
+            hasPrice: null,
+          };
+          setLocalFilters(clearedFilters);
+          onFiltersChange(clearedFilters);
+        };
+
+        const hasActiveFilters = () => {
+          return (
+            localFilters.rarities.length > 0 ||
+            localFilters.quantityMin !== null ||
+            localFilters.quantityMax !== null ||
+            localFilters.quantityMode !== "all" ||
+            localFilters.priceMin !== null ||
+            localFilters.priceMax !== null ||
+            localFilters.hasPrice !== null
+          );
+        };
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={onClose}
+          >
+            <div
+              className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-2xl w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-slate-200">
+                  Filter Items
+                  {panel === "left"
+                    ? " (Left Panel)"
+                    : panel === "right"
+                    ? " (Right Panel)"
+                    : ""}
+                </h3>
+                <button
+                  onClick={onClose}
+                  className="text-slate-400 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Rarity Filter */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-slate-300 mb-3">
+                  Rarity
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(RARITY_MAP).map(([value, config]) => {
+                    const rarityValue = parseInt(value);
+                    const isSelected =
+                      localFilters.rarities.includes(rarityValue);
+                    return (
+                      <button
+                        key={value}
+                        onClick={() => handleRarityToggle(rarityValue)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                          isSelected
+                            ? `text-blue-400 border-blue-600 bg-blue-900/20 border-2 border-current`
+                            : "bg-slate-800 text-slate-400 border-2 border-slate-700 hover:border-slate-600"
+                        }`}
+                      >
+                        {config.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Quantity Filter */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-slate-300 mb-3">
+                  Quantity
+                </label>
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() =>
+                        setLocalFilters((prev) => ({
+                          ...prev,
+                          quantityMode: "all",
+                        }))
+                      }
+                      className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                        localFilters.quantityMode === "all"
+                          ? "bg-blue-600 text-white"
+                          : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                      }`}
+                    >
+                      All
+                    </button>
+                    <button
+                      onClick={() =>
+                        setLocalFilters((prev) => ({
+                          ...prev,
+                          quantityMode: "inStock",
+                        }))
+                      }
+                      className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                        localFilters.quantityMode === "inStock"
+                          ? "bg-blue-600 text-white"
+                          : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                      }`}
+                    >
+                      In Stock
+                    </button>
+                    <button
+                      onClick={() =>
+                        setLocalFilters((prev) => ({
+                          ...prev,
+                          quantityMode: "outOfStock",
+                        }))
+                      }
+                      className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                        localFilters.quantityMode === "outOfStock"
+                          ? "bg-blue-600 text-white"
+                          : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                      }`}
+                    >
+                      Out of Stock
+                    </button>
+                  </div>
+                  {localFilters.quantityMode === "all" && (
+                    <div className="flex gap-3 items-center">
+                      <div className="flex-1">
+                        <label className="block text-xs text-slate-400 mb-1">
+                          Min
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={localFilters.quantityMin || ""}
+                          onChange={(e) =>
+                            setLocalFilters((prev) => ({
+                              ...prev,
+                              quantityMin:
+                                e.target.value === ""
+                                  ? null
+                                  : parseInt(e.target.value) || 0,
+                            }))
+                          }
+                          placeholder="Min"
+                          className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs text-slate-400 mb-1">
+                          Max
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={localFilters.quantityMax || ""}
+                          onChange={(e) =>
+                            setLocalFilters((prev) => ({
+                              ...prev,
+                              quantityMax:
+                                e.target.value === ""
+                                  ? null
+                                  : parseInt(e.target.value) || 0,
+                            }))
+                          }
+                          placeholder="Max"
+                          className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Price Filter */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-slate-300 mb-3">
+                  Price
+                </label>
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() =>
+                        setLocalFilters((prev) => ({
+                          ...prev,
+                          hasPrice: null,
+                        }))
+                      }
+                      className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                        localFilters.hasPrice === null
+                          ? "bg-blue-600 text-white"
+                          : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                      }`}
+                    >
+                      All
+                    </button>
+                    <button
+                      onClick={() =>
+                        setLocalFilters((prev) => ({
+                          ...prev,
+                          hasPrice: true,
+                        }))
+                      }
+                      className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                        localFilters.hasPrice === true
+                          ? "bg-blue-600 text-white"
+                          : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                      }`}
+                    >
+                      Has Price
+                    </button>
+                    <button
+                      onClick={() =>
+                        setLocalFilters((prev) => ({
+                          ...prev,
+                          hasPrice: false,
+                        }))
+                      }
+                      className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                        localFilters.hasPrice === false
+                          ? "bg-blue-600 text-white"
+                          : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                      }`}
+                    >
+                      No Price
+                    </button>
+                  </div>
+                  <div className="flex gap-3 items-center">
+                    <div className="flex-1">
+                      <label className="block text-xs text-slate-400 mb-1">
+                        Min ($)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={localFilters.priceMin || ""}
+                        onChange={(e) =>
+                          setLocalFilters((prev) => ({
+                            ...prev,
+                            priceMin:
+                              e.target.value === ""
+                                ? null
+                                : parseFloat(e.target.value) || 0,
+                          }))
+                        }
+                        placeholder="Min"
+                        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs text-slate-400 mb-1">
+                        Max ($)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={localFilters.priceMax || ""}
+                        onChange={(e) =>
+                          setLocalFilters((prev) => ({
+                            ...prev,
+                            priceMax:
+                              e.target.value === ""
+                                ? null
+                                : parseFloat(e.target.value) || 0,
+                          }))
+                        }
+                        placeholder="Max"
+                        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-between items-center pt-4 border-t border-slate-700">
+                <button
+                  onClick={handleClear}
+                  disabled={!hasActiveFilters()}
+                  className="px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Clear All
+                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={onClose}
+                    className="px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleApply}
+                    className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors"
+                  >
+                    Apply Filters
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
       // New Inventory Modal
       const NewInventoryModal = ({
         isOpen,
@@ -1467,7 +1816,7 @@
                   onKeyPress={(e) => e.key === "Enter" && handleCreate()}
                 />
               </div>
-          
+
               <div className="flex justify-end gap-3">
                 <button
                   onClick={onClose}
@@ -2494,10 +2843,11 @@
             ) {
               return {
                 data: obj.data,
-                meta: { 
-                  timestamp: obj.timestamp, 
+                meta: {
+                  timestamp: obj.timestamp,
                   Date: obj.Date,
-                  username: obj.username || obj.userName || obj.user_name || null
+                  username:
+                    obj.username || obj.userName || obj.user_name || null,
                 },
               };
             }
@@ -3378,7 +3728,9 @@
         const [inventories, setInventories] = useState([]); // All inventories
         const [openInventoryIds, setOpenInventoryIds] = useState([]); // IDs of open tabs
         const [activeInventoryId, setActiveInventoryId] = useState(null); // Currently active inventory
-        const [inventoryItemCounts, setInventoryItemCounts] = useState(new Map()); // Item counts per inventory
+        const [inventoryItemCounts, setInventoryItemCounts] = useState(
+          new Map()
+        ); // Item counts per inventory
         const [username, setUsername] = useState(null); // Username from inventory_data.txt
         const [openTabMenuId, setOpenTabMenuId] = useState(null); // ID of tab with open context menu
         const [menuPosition, setMenuPosition] = useState({
@@ -3422,6 +3774,37 @@
         const [searchQuery, setSearchQuery] = useState("");
         const [searchResults, setSearchResults] = useState(null);
         const [isSearching, setIsSearching] = useState(false);
+
+        // Filter State
+        const [showFilterModal, setShowFilterModal] = useState(false);
+        const [filterModalPanel, setFilterModalPanel] = useState(null); // "single", "left", "right"
+        const [filters, setFilters] = useState({
+          rarities: [], // Array of selected rarity values [0, 1, 2]
+          quantityMin: null,
+          quantityMax: null,
+          quantityMode: "all", // "all", "inStock", "outOfStock"
+          priceMin: null,
+          priceMax: null,
+          hasPrice: null, // null, true, false
+        });
+        const [leftPanelFilters, setLeftPanelFilters] = useState({
+          rarities: [],
+          quantityMin: null,
+          quantityMax: null,
+          quantityMode: "all",
+          priceMin: null,
+          priceMax: null,
+          hasPrice: null,
+        });
+        const [rightPanelFilters, setRightPanelFilters] = useState({
+          rarities: [],
+          quantityMin: null,
+          quantityMax: null,
+          quantityMode: "all",
+          priceMin: null,
+          priceMax: null,
+          hasPrice: null,
+        });
 
         // Modal State
         const [showFirstClearModal, setShowFirstClearModal] = useState(false);
@@ -3485,7 +3868,7 @@
               if (savedUsername) {
                 setUsername(savedUsername);
               }
-              
+
               // Load all inventories
               const loadedInventories = await loadInventories();
               setInventories(loadedInventories);
@@ -5055,10 +5438,11 @@
             ) {
               return {
                 data: obj.data,
-                meta: { 
-                  timestamp: obj.timestamp, 
+                meta: {
+                  timestamp: obj.timestamp,
                   Date: obj.Date,
-                  username: obj.username || obj.userName || obj.user_name || null
+                  username:
+                    obj.username || obj.userName || obj.user_name || null,
                 },
               };
             }
@@ -6738,34 +7122,79 @@
           }
         };
 
-        // Filter items based on selected sublist
+        // Filter items based on selected sublist and filters
         const displayItems = useMemo(() => {
           const baseItems = searchResults || data || [];
 
-          // If no sublist selected, show all items (Main List)
-          if (!selectedSublistId) {
-            return baseItems;
+          // First filter by sublist if selected
+          let filteredItems = baseItems;
+          if (selectedSublistId) {
+            const selectedSublist = sublists.find(
+              (s) => s.id === selectedSublistId
+            );
+            if (
+              selectedSublist &&
+              selectedSublist.itemTypes &&
+              selectedSublist.itemTypes.length > 0
+            ) {
+              filteredItems = filteredItems.filter(
+                (item) =>
+                  item.type && selectedSublist.itemTypes.includes(item.type)
+              );
+            } else {
+              return [];
+            }
           }
 
-          // Find the selected sublist
-          const selectedSublist = sublists.find(
-            (s) => s.id === selectedSublistId
-          );
-          if (
-            !selectedSublist ||
-            !selectedSublist.itemTypes ||
-            selectedSublist.itemTypes.length === 0
-          ) {
-            return [];
-          }
+          // Apply filters
+          return filteredItems.filter((item) => {
+            // Rarity filter
+            if (filters.rarities.length > 0) {
+              if (!filters.rarities.includes(item.rarity)) {
+                return false;
+              }
+            }
 
-          // Filter items to only show those in the sublist
-          return baseItems.filter(
-            (item) => item.type && selectedSublist.itemTypes.includes(item.type)
-          );
-        }, [searchResults, data, selectedSublistId, sublists]);
+            // Quantity filter
+            const quantity = item.quantity || 0;
+            if (filters.quantityMode === "inStock") {
+              if (quantity <= 0) return false;
+            } else if (filters.quantityMode === "outOfStock") {
+              if (quantity > 0) return false;
+            } else if (filters.quantityMode === "all") {
+              if (
+                filters.quantityMin !== null &&
+                quantity < filters.quantityMin
+              ) {
+                return false;
+              }
+              if (
+                filters.quantityMax !== null &&
+                quantity > filters.quantityMax
+              ) {
+                return false;
+              }
+            }
 
-        // Filter left panel items based on selected sublist
+            // Price filter
+            const price = item.price || 0;
+            if (filters.hasPrice === true) {
+              if (price <= 0) return false;
+            } else if (filters.hasPrice === false) {
+              if (price > 0) return false;
+            }
+            if (filters.priceMin !== null && price < filters.priceMin) {
+              return false;
+            }
+            if (filters.priceMax !== null && price > filters.priceMax) {
+              return false;
+            }
+
+            return true;
+          });
+        }, [searchResults, data, selectedSublistId, sublists, filters]);
+
+        // Filter left panel items based on selected sublist and filters
         const leftPanelDisplayItems = useMemo(() => {
           if (!leftPanelData) return [];
 
@@ -6804,15 +7233,67 @@
             }
           }
 
-          return filtered;
+          // Apply filters
+          return filtered.filter((item) => {
+            // Rarity filter
+            if (leftPanelFilters.rarities.length > 0) {
+              if (!leftPanelFilters.rarities.includes(item.rarity)) {
+                return false;
+              }
+            }
+
+            // Quantity filter
+            const quantity = item.quantity || 0;
+            if (leftPanelFilters.quantityMode === "inStock") {
+              if (quantity <= 0) return false;
+            } else if (leftPanelFilters.quantityMode === "outOfStock") {
+              if (quantity > 0) return false;
+            } else if (leftPanelFilters.quantityMode === "all") {
+              if (
+                leftPanelFilters.quantityMin !== null &&
+                quantity < leftPanelFilters.quantityMin
+              ) {
+                return false;
+              }
+              if (
+                leftPanelFilters.quantityMax !== null &&
+                quantity > leftPanelFilters.quantityMax
+              ) {
+                return false;
+              }
+            }
+
+            // Price filter
+            const price = item.price || 0;
+            if (leftPanelFilters.hasPrice === true) {
+              if (price <= 0) return false;
+            } else if (leftPanelFilters.hasPrice === false) {
+              if (price > 0) return false;
+            }
+            if (
+              leftPanelFilters.priceMin !== null &&
+              price < leftPanelFilters.priceMin
+            ) {
+              return false;
+            }
+            if (
+              leftPanelFilters.priceMax !== null &&
+              price > leftPanelFilters.priceMax
+            ) {
+              return false;
+            }
+
+            return true;
+          });
         }, [
           leftPanelData,
           leftPanelSearchQuery,
           leftPanelSelectedSublistId,
           leftPanelSublists,
+          leftPanelFilters,
         ]);
 
-        // Filter right panel items based on selected sublist
+        // Filter right panel items based on selected sublist and filters
         const rightPanelDisplayItems = useMemo(() => {
           if (!rightPanelData) return [];
 
@@ -6851,12 +7332,64 @@
             }
           }
 
-          return filtered;
+          // Apply filters
+          return filtered.filter((item) => {
+            // Rarity filter
+            if (rightPanelFilters.rarities.length > 0) {
+              if (!rightPanelFilters.rarities.includes(item.rarity)) {
+                return false;
+              }
+            }
+
+            // Quantity filter
+            const quantity = item.quantity || 0;
+            if (rightPanelFilters.quantityMode === "inStock") {
+              if (quantity <= 0) return false;
+            } else if (rightPanelFilters.quantityMode === "outOfStock") {
+              if (quantity > 0) return false;
+            } else if (rightPanelFilters.quantityMode === "all") {
+              if (
+                rightPanelFilters.quantityMin !== null &&
+                quantity < rightPanelFilters.quantityMin
+              ) {
+                return false;
+              }
+              if (
+                rightPanelFilters.quantityMax !== null &&
+                quantity > rightPanelFilters.quantityMax
+              ) {
+                return false;
+              }
+            }
+
+            // Price filter
+            const price = item.price || 0;
+            if (rightPanelFilters.hasPrice === true) {
+              if (price <= 0) return false;
+            } else if (rightPanelFilters.hasPrice === false) {
+              if (price > 0) return false;
+            }
+            if (
+              rightPanelFilters.priceMin !== null &&
+              price < rightPanelFilters.priceMin
+            ) {
+              return false;
+            }
+            if (
+              rightPanelFilters.priceMax !== null &&
+              price > rightPanelFilters.priceMax
+            ) {
+              return false;
+            }
+
+            return true;
+          });
         }, [
           rightPanelData,
           rightPanelSearchQuery,
           rightPanelSelectedSublistId,
           rightPanelSublists,
+          rightPanelFilters,
         ]);
 
         const activeInventory = inventories.find(
@@ -6886,9 +7419,7 @@
                     Inventory Manager
                   </h1>
                   {username && (
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {username}
-                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">{username}</p>
                   )}
                 </div>
               </div>
@@ -6949,7 +7480,9 @@
                               : "bg-slate-900/30 text-slate-500 hover:bg-slate-900/50"
                           }`}
                         >
-                          <span className="truncate mr-2">{inv.name} ({itemCount.toLocaleString()})</span>
+                          <span className="truncate mr-2">
+                            {inv.name} ({itemCount.toLocaleString()})
+                          </span>
                           <div className="relative">
                             <button
                               data-tab-menu-id={tabId}
@@ -7128,7 +7661,8 @@
                           }
                         >
                           {inventories.map((inv) => {
-                            const itemCount = inventoryItemCounts.get(inv.id) || 0;
+                            const itemCount =
+                              inventoryItemCounts.get(inv.id) || 0;
                             return (
                               <option
                                 key={inv.id}
@@ -7156,7 +7690,8 @@
                           }
                         >
                           {inventories.map((inv) => {
-                            const itemCount = inventoryItemCounts.get(inv.id) || 0;
+                            const itemCount =
+                              inventoryItemCounts.get(inv.id) || 0;
                             return (
                               <option
                                 key={inv.id}
@@ -7220,6 +7755,37 @@
                         </div>
                       )}
                     </div>
+                    <button
+                      onClick={() => {
+                        setFilterModalPanel("single");
+                        setShowFilterModal(true);
+                      }}
+                      className={`px-4 py-2 text-sm rounded-lg transition-colors flex items-center gap-2 ${
+                        filters.rarities.length > 0 ||
+                        filters.quantityMin !== null ||
+                        filters.quantityMax !== null ||
+                        filters.quantityMode !== "all" ||
+                        filters.priceMin !== null ||
+                        filters.priceMax !== null ||
+                        filters.hasPrice !== null
+                          ? "bg-blue-600 text-white hover:bg-blue-500"
+                          : "text-slate-300 hover:text-white hover:bg-slate-800"
+                      }`}
+                      title="Filter items"
+                    >
+                      <Filter className="w-4 h-4" />
+                      {filters.rarities.length > 0 ||
+                      filters.quantityMin !== null ||
+                      filters.quantityMax !== null ||
+                      filters.quantityMode !== "all" ||
+                      filters.priceMin !== null ||
+                      filters.priceMax !== null ||
+                      filters.hasPrice !== null ? (
+                        <span className="text-xs bg-blue-700 px-1.5 py-0.5 rounded">
+                          Active
+                        </span>
+                      ) : null}
+                    </button>
                     <div className="relative">
                       <button
                         className="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors flex items-center gap-2 add-button-menu-button"
@@ -7371,6 +7937,37 @@
                         </div>
                         <button
                           onClick={() => {
+                            setFilterModalPanel("left");
+                            setShowFilterModal(true);
+                          }}
+                          className={`px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center gap-1.5 ${
+                            leftPanelFilters.rarities.length > 0 ||
+                            leftPanelFilters.quantityMin !== null ||
+                            leftPanelFilters.quantityMax !== null ||
+                            leftPanelFilters.quantityMode !== "all" ||
+                            leftPanelFilters.priceMin !== null ||
+                            leftPanelFilters.priceMax !== null ||
+                            leftPanelFilters.hasPrice !== null
+                              ? "bg-blue-600 text-white hover:bg-blue-500"
+                              : "text-slate-300 hover:text-white hover:bg-slate-800"
+                          }`}
+                          title="Filter items"
+                        >
+                          <Filter className="w-4 h-4" />
+                          {leftPanelFilters.rarities.length > 0 ||
+                          leftPanelFilters.quantityMin !== null ||
+                          leftPanelFilters.quantityMax !== null ||
+                          leftPanelFilters.quantityMode !== "all" ||
+                          leftPanelFilters.priceMin !== null ||
+                          leftPanelFilters.priceMax !== null ||
+                          leftPanelFilters.hasPrice !== null ? (
+                            <span className="text-xs bg-blue-700 px-1 py-0.5 rounded">
+                              Active
+                            </span>
+                          ) : null}
+                        </button>
+                        <button
+                          onClick={() => {
                             /* TODO: Upload to left panel */
                           }}
                           className="px-3 py-1.5 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
@@ -7465,6 +8062,37 @@
                             </button>
                           )}
                         </div>
+                        <button
+                          onClick={() => {
+                            setFilterModalPanel("right");
+                            setShowFilterModal(true);
+                          }}
+                          className={`px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center gap-1.5 ${
+                            rightPanelFilters.rarities.length > 0 ||
+                            rightPanelFilters.quantityMin !== null ||
+                            rightPanelFilters.quantityMax !== null ||
+                            rightPanelFilters.quantityMode !== "all" ||
+                            rightPanelFilters.priceMin !== null ||
+                            rightPanelFilters.priceMax !== null ||
+                            rightPanelFilters.hasPrice !== null
+                              ? "bg-blue-600 text-white hover:bg-blue-500"
+                              : "text-slate-300 hover:text-white hover:bg-slate-800"
+                          }`}
+                          title="Filter items"
+                        >
+                          <Filter className="w-4 h-4" />
+                          {rightPanelFilters.rarities.length > 0 ||
+                          rightPanelFilters.quantityMin !== null ||
+                          rightPanelFilters.quantityMax !== null ||
+                          rightPanelFilters.quantityMode !== "all" ||
+                          rightPanelFilters.priceMin !== null ||
+                          rightPanelFilters.priceMax !== null ||
+                          rightPanelFilters.hasPrice !== null ? (
+                            <span className="text-xs bg-blue-700 px-1 py-0.5 rounded">
+                              Active
+                            </span>
+                          ) : null}
+                        </button>
                         <button
                           onClick={() => {
                             /* TODO: Upload to right panel */
@@ -7649,6 +8277,29 @@
               inventories={inventories}
               imageMap={imageMap}
               onTransfer={handleTransfer}
+            />
+
+            <FilterModal
+              isOpen={showFilterModal}
+              onClose={() => {
+                setShowFilterModal(false);
+                setFilterModalPanel(null);
+              }}
+              filters={
+                filterModalPanel === "left"
+                  ? leftPanelFilters
+                  : filterModalPanel === "right"
+                  ? rightPanelFilters
+                  : filters
+              }
+              onFiltersChange={
+                filterModalPanel === "left"
+                  ? setLeftPanelFilters
+                  : filterModalPanel === "right"
+                  ? setRightPanelFilters
+                  : setFilters
+              }
+              panel={filterModalPanel}
             />
 
             <NewSublistModal
