@@ -2766,12 +2766,17 @@
               throw new Error("No folder selected or folder is empty.");
 
             const dataFile = files.find(
-              (f) =>
-                f.name.toLowerCase() === "furniture_data.txt" ||
-                f.name.toLowerCase().endsWith(".json")
+              (f) => {
+                const name = f.name.toLowerCase();
+                return (
+                  name === "furniture_data.txt" ||
+                  name === "inventory_data.txt" ||
+                  name.endsWith(".json")
+                );
+              }
             );
             if (!dataFile)
-              throw new Error("Could not find 'furniture_data.txt'.");
+              throw new Error("Could not find 'furniture_data.txt' or 'inventory_data.txt'.");
 
             const urlMap = new Map();
             const fileMap = new Map();
@@ -4249,7 +4254,7 @@
           }
         }, [openTabMenuId, showAddButtonMenu, showSearchBarMenu]);
 
-        // Show Buy Me a Coffee modal once per day when inventory is loaded
+        // Show Buy Me a Coffee modal once per day when inventory is loaded and embeddings are complete
         useEffect(() => {
           // Only show if inventory is fully loaded
           if (
@@ -4259,6 +4264,15 @@
             data &&
             data.length > 0
           ) {
+            // If pipeline exists, wait for embeddings to complete (indexingProgress === 100)
+            // If no pipeline, embeddings aren't needed, so we can show the modal
+            const embeddingsComplete = !pipeline || indexingProgress === 100;
+
+            if (!embeddingsComplete) {
+              // Embeddings are still processing, don't show modal yet
+              return;
+            }
+
             // Check if modal was dismissed today
             const lastDismissedDate = localStorage.getItem(
               "buyMeACoffeeModalDismissedDate"
@@ -4279,6 +4293,8 @@
           hasStoredData,
           inventories.length,
           data,
+          pipeline,
+          indexingProgress,
         ]);
 
         // Handlers
@@ -4872,12 +4888,17 @@
 
           try {
             const dataFile = files.find(
-              (f) =>
-                f.name.toLowerCase() === "furniture_data.txt" ||
-                f.name.toLowerCase().endsWith(".json")
+              (f) => {
+                const name = f.name.toLowerCase();
+                return (
+                  name === "furniture_data.txt" ||
+                  name === "inventory_data.txt" ||
+                  name.endsWith(".json")
+                );
+              }
             );
             if (!dataFile) {
-              alert("Could not find 'furniture_data.txt'.");
+              alert("Could not find 'furniture_data.txt' or 'inventory_data.txt'.");
               e.target.value = "";
               return;
             }
@@ -6040,13 +6061,16 @@
           }
 
           try {
-            // Look for inventory_data.txt in the folder
+            // Look for inventory_data.txt or furniture_data.txt in the folder
             const dataFile = files.find(
-              (f) => f.name.toLowerCase() === "inventory_data.txt"
+              (f) => {
+                const name = f.name.toLowerCase();
+                return name === "inventory_data.txt" || name === "furniture_data.txt";
+              }
             );
             
             if (!dataFile) {
-              throw new Error("Could not find 'inventory_data.txt' in the selected folder.");
+              throw new Error("Could not find 'inventory_data.txt' or 'furniture_data.txt' in the selected folder.");
             }
 
             // Check if there's also a .db file (for full restore)
