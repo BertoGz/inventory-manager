@@ -3856,7 +3856,7 @@
 
         // File input ref for update inventory
         const updateInventoryInputRef = useRef(null);
-        // File input ref for importing data
+        // Directory input ref for importing data
         const importDataInputRef = useRef(null);
 
         // 0. Load from IndexedDB on mount - Multi-inventory system
@@ -5991,22 +5991,34 @@
         };
 
         const handleImportData = () => {
-          // Trigger file input for importing data
+          // Trigger directory input for importing data
           if (importDataInputRef.current) {
             importDataInputRef.current.click();
           }
         };
 
         const handleImportFileSelect = async (e) => {
-          const file = e.target.files[0];
-          if (!file) {
+          const files = Array.from(e.target.files);
+          if (files.length === 0) {
             e.target.value = "";
             return;
           }
 
           try {
-            if (file.name.toLowerCase().endsWith(".db")) {
-              // Import from database - reuse the logic from FileUploader
+            // Look for inventory_data.txt in the folder
+            const dataFile = files.find(
+              (f) => f.name.toLowerCase() === "inventory_data.txt"
+            );
+            
+            if (!dataFile) {
+              throw new Error("Could not find 'inventory_data.txt' in the selected folder.");
+            }
+
+            // Check if there's also a .db file (for full restore)
+            const dbFile = files.find((f) => f.name.toLowerCase().endsWith(".db"));
+            
+            if (dbFile) {
+              // Import from database file
               let initSqlJs = window.initSqlJs;
               if (!initSqlJs) {
                 await new Promise((resolve) => {
@@ -6027,7 +6039,7 @@
 
               if (!initSqlJs) throw new Error("SQL.js library not loaded.");
 
-              const arrayBuffer = await file.arrayBuffer();
+              const arrayBuffer = await dbFile.arrayBuffer();
               const SQL = await initSqlJs({
                 locateFile: (file) =>
                   `https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/${file}`,
@@ -6235,14 +6247,21 @@
                 // No inventory exists, use handleDataLoaded
                 await handleDataLoaded(enrichedData, urlMap, metadata, fileMap);
               }
-            } else if (file.name.toLowerCase().endsWith(".txt")) {
-              // Import from .txt file (furniture_data.txt)
-              const text = await readFileAsText(file);
+            } else {
+              // Import from .txt file (inventory_data.txt)
+              const text = await readFileAsText(dataFile);
               const { data: enrichedData, metadata } = parseAndEnrichData(text);
 
-              // No images for single .txt file import
+              // Load images from the folder
               const urlMap = new Map();
               const fileMap = new Map();
+              
+              files.forEach((file) => {
+                if (file.type.startsWith("image/")) {
+                  urlMap.set(file.name, URL.createObjectURL(file));
+                  fileMap.set(file.name, file);
+                }
+              });
 
               // Check if we should use conflict resolution (if there's an existing inventory with items)
               let targetInventoryId = activeInventoryId;
@@ -6281,8 +6300,6 @@
                 // No inventory exists, use handleDataLoaded
                 await handleDataLoaded(enrichedData, urlMap, metadata, fileMap);
               }
-            } else {
-              throw new Error("Please select a .db or .txt file.");
             }
           } catch (err) {
             console.error(err);
@@ -8227,11 +8244,12 @@
               onChange={handleUpdateInventoryFileSelect}
             />
 
-            {/* Hidden file input for importing data */}
+            {/* Hidden directory input for importing data */}
             <input
               ref={importDataInputRef}
               type="file"
-              accept=".db,.txt"
+              webkitdirectory=""
+              directory=""
               style={{ display: "none" }}
               onChange={handleImportFileSelect}
             />
