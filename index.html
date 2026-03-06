@@ -38,19 +38,7 @@
       }
     </style>
 
-    <!-- Google Analytics 4 (optional, only runs if VITE_GA_MEASUREMENT_ID is set) -->
-    <!-- Replace G-DPZWE4V18S via Vite env (set in .env) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-DPZWE4V18S"></script>
-    <script>
-      if ("G-DPZWE4V18S" && "G-DPZWE4V18S" !== "undefined") {
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        gtag("js", new Date());
-        gtag("config", "G-DPZWE4V18S", {
-          send_page_view: true,
-        });
-      }
-    </script>
+    <!-- Google Analytics 4 is loaded from the app when VITE_GA_MEASUREMENT_ID is set in .env -->
 
     <!-- External Libraries (JSZip loaded via npm bundle so stream polyfill applies) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -59,7 +47,7 @@
     <script src="https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/sql-wasm.js"></script>
 
     <!-- Transformers.js (AI Model) -->
-    <script type="module" crossorigin src="/inventory-manager/assets/index-D1vMPFwD.js"></script>
+    <script type="module" crossorigin src="/inventory-manager/assets/index-NeU6Ux9Z.js"></script>
     <link rel="modulepreload" crossorigin href="/inventory-manager/assets/vendor-modules-DKCDq9IC.js">
     <link rel="stylesheet" crossorigin href="/inventory-manager/assets/style-D_T6vUyv.css">
   </head>
