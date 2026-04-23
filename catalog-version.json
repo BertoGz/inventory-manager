@@ -1,5 +1,59 @@
 {
   "catalogId": "vmk-main",
-  "latestVersion": 1,
-  "timestamp": 1772615199841
+  "latestVersion": 10,
+  "timestamp": 1776918151197,
+  "catalogBundleFormat": 1,
+  "segments": [
+    {
+      "fromVersion": 0,
+      "toVersion": 1,
+      "url": "/inventory-manager/catalog/catalog-p1.cat"
+    },
+    {
+      "fromVersion": 1,
+      "toVersion": 2,
+      "url": "/inventory-manager/catalog/catalog-p2.cat"
+    },
+    {
+      "fromVersion": 2,
+      "toVersion": 3,
+      "url": "/inventory-manager/catalog/catalog-p3.cat"
+    },
+    {
+      "fromVersion": 3,
+      "toVersion": 4,
+      "url": "/inventory-manager/catalog/catalog-p4.cat"
+    },
+    {
+      "fromVersion": 4,
+      "toVersion": 5,
+      "url": "/inventory-manager/catalog/catalog-p5.cat"
+    },
+    {
+      "fromVersion": 5,
+      "toVersion": 6,
+      "url": "/inventory-manager/catalog/catalog-p6.cat"
+    },
+    {
+      "fromVersion": 6,
+      "toVersion": 7,
+      "url": "/inventory-manager/catalog/catalog-p7.cat"
+    },
+    {
+      "fromVersion": 7,
+      "toVersion": 8,
+      "url": "/inventory-manager/catalog/catalog-p8.cat"
+    },
+    {
+      "fromVersion": 8,
+      "toVersion": 9,
+      "url": "/inventory-manager/catalog/catalog-p9.cat"
+    },
+    {
+      "fromVersion": 9,
+      "toVersion": 10,
+      "url": "/inventory-manager/catalog/catalog-p10.cat"
+    }
+  ],
+  "catchUpZipUrl": null
 }
