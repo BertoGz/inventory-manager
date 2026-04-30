@@ -40,12 +40,12 @@
 
     <!-- Google Analytics 4 is loaded from the app when VITE_GA_MEASUREMENT_ID is set in .env -->
 
-    <!-- xlsx / ExcelJS / jsPDF / sql.js: loaded from src/Helpers/loadHeavyBrowserGlobals.js
-         only when the full inventory app boots (not for ?profile=folder-blob-* or bare). -->
+    <!-- xlsx / ExcelJS / jsPDF: loaded on demand from the app. sql.js is lazy-loaded via Vite
+         (src/Helpers/sqlJs.js + bundled wasm) when backup / .db restore runs — no global script tag. -->
 
     <!-- Transformers.js loads on demand (first search / embedding job) via dynamic import. -->
-    <script type="module" crossorigin src="/inventory-manager/assets/index-CcXq__vI.js"></script>
-    <link rel="modulepreload" crossorigin href="/inventory-manager/assets/vendor-modules-BNGJcSaQ.js">
+    <script type="module" crossorigin src="/inventory-manager/assets/index-BKAqImQ9.js"></script>
+    <link rel="modulepreload" crossorigin href="/inventory-manager/assets/vendor-modules-BL1yPz22.js">
     <link rel="stylesheet" crossorigin href="/inventory-manager/assets/style-D3IqIOq_.css">
   </head>
   <body class="overflow-hidden" style="background: var(--app-bg); color: var(--text-main);">
