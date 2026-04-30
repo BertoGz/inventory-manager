@@ -1,7 +1,7 @@
 {
   "catalogId": "vmk-main",
-  "latestVersion": 11,
-  "timestamp": 1777358443459,
+  "latestVersion": 12,
+  "timestamp": 1777402079037,
   "catalogBundleFormat": 1,
   "segments": [
     {
@@ -58,6 +58,11 @@
       "fromVersion": 10,
       "toVersion": 11,
       "url": "/inventory-manager/catalog/catalog-p11.cat"
+    },
+    {
+      "fromVersion": 11,
+      "toVersion": 12,
+      "url": "/inventory-manager/catalog/catalog-p12.cat"
     }
   ],
   "catchUpZipUrl": null
