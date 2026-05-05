@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "themes": [
+    {
+      "id": 0,
+      "name": "OldSchool VMK",
+      "paperTextureOverlay": "paperTextureOverlay.png",
+      "backdropFile": "theme2.png",
+      "shopTitle": "",
+      "contentPaddingTop": 280,
+      "badgeColor": "#1e293b",
+      "badgeText": "#f8fafc",
+      "dividerColor": "#000000",
+      "textPrimary": "#000000",
+      "textSecondary": "#000000",
+      "fontFamily": "Arial, Helvetica, sans-serif",
+      "titleColor": "#ffffff",
+      "titleFontSize": 124
+    },
+    {
+      "id": 1,
+      "name": "OldSchool VMK (Pink)",
+      "paperTextureOverlay": "paperTextureOverlay.png",
+      "pageTexture": "pageTexture.png",
+      "backdropFile": "theme3.png",
+      "shopTitle": "",
+      "contentPaddingTop": 280,
+      "badgeColor": "#1e293b",
+      "badgeText": "#f8fafc",
+      "dividerColor": "#000000",
+      "textPrimary": "#000000",
+      "textSecondary": "#000000",
+      "fontFamily": "Arial, Helvetica, sans-serif",
+      "titleColor": "#ffffff",
+      "titleFontSize": 124
+    }
+  ]
+}
